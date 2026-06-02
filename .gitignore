@@ -1,0 +1,29 @@
+# Node / Next.js
+review-calendar-web/node_modules/
+review-calendar-web/.next/
+review-calendar-web/out/
+review-calendar-web/build/
+review-calendar-web/coverage/
+review-calendar-web/*.tsbuildinfo
+review-calendar-web/next-env.d.ts
+
+# Package manager / logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment files
+review-calendar-web/.env*
+
+# Deployment
+review-calendar-web/.vercel/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+
+# Local VS Code state
+.vscode/*
+!.vscode/settings.json
+!.vscode/open-review-calendar-external.cmd
