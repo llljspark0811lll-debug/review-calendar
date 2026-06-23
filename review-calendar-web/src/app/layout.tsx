@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
-import { M_PLUS_Rounded_1c, Mochiy_Pop_One } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const rounded = M_PLUS_Rounded_1c({
+const rounded = localFont({
+  src: "./fonts/HakgyoansimChilpanjiugae-B.ttf",
   variable: "--font-rounded",
-  subsets: ["latin"],
-  weight: ["400", "500", "700", "800", "900"],
+  weight: "700",
+  display: "swap",
 });
 
-const display = Mochiy_Pop_One({
+const display = localFont({
+  src: "./fonts/HakgyoansimChilpanjiugae-B.ttf",
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: "400",
+  weight: "700",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
