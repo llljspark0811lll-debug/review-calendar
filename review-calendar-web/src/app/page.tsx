@@ -323,6 +323,10 @@ function isReviewNoteDomain(domain: string) {
   return domain === "reviewnote.co.kr";
 }
 
+function isGangnamDomain(domain: string) {
+  return domain === "xn--939au0g4vj8sq.net";
+}
+
 export default function Home() {
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -351,10 +355,13 @@ export default function Home() {
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [scheduleErrorMessage, setScheduleErrorMessage] = useState("");
   const [siteFormErrorMessage, setSiteFormErrorMessage] = useState("");
-  const [isLoginPending, setIsLoginPending] = useState(false);
+  const [loginPendingSite, setLoginPendingSite] = useState<
+    "reviewnote" | "gangnam" | null
+  >(null);
   const [isBootstrapLoading, setIsBootstrapLoading] = useState(true);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [reviewNoteConnected, setReviewNoteConnected] = useState(false);
+  const [gangnamConnected, setGangnamConnected] = useState(false);
   const [holidaySyncEnabled, setHolidaySyncEnabled] = useState(false);
   const [isSchedulePending, setIsSchedulePending] = useState(false);
   const [isDeletePending, setIsDeletePending] = useState(false);
@@ -500,9 +507,11 @@ export default function Home() {
   const connectedSitesCount = useMemo(
     () =>
       siteConnections.filter(
-        (site) => isReviewNoteDomain(site.domain) && reviewNoteConnected,
+        (site) =>
+          (isReviewNoteDomain(site.domain) && reviewNoteConnected) ||
+          (isGangnamDomain(site.domain) && gangnamConnected),
       ).length,
-    [reviewNoteConnected, siteConnections],
+    [gangnamConnected, reviewNoteConnected, siteConnections],
   );
 
   async function loadReviewNoteConnection() {
@@ -519,6 +528,25 @@ export default function Home() {
       setReviewNoteConnected(Boolean(result.connected));
     } catch {
       setReviewNoteConnected(false);
+    } finally {
+      setIsSessionLoading(false);
+    }
+  }
+
+  async function loadGangnamConnection() {
+    setIsSessionLoading(true);
+
+    try {
+      const response = await fetch("/api/gangnam/session");
+      const result = (await response.json()) as { connected?: boolean };
+
+      if (!response.ok) {
+        throw new Error();
+      }
+
+      setGangnamConnected(Boolean(result.connected));
+    } catch {
+      setGangnamConnected(false);
     } finally {
       setIsSessionLoading(false);
     }
@@ -563,19 +591,31 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/reviewnote/session")
-      .then(async (response) => {
+    Promise.all([
+      fetch("/api/reviewnote/session").then(async (response) => {
         const result = (await response.json()) as { connected?: boolean };
+
+        return response.ok ? Boolean(result.connected) : false;
+      }),
+      fetch("/api/gangnam/session").then(async (response) => {
+        const result = (await response.json()) as { connected?: boolean };
+
+        return response.ok ? Boolean(result.connected) : false;
+      }),
+    ])
+      .then(([nextReviewNoteConnected, nextGangnamConnected]) => {
 
         if (cancelled) {
           return;
         }
 
-        setReviewNoteConnected(Boolean(result.connected));
+        setReviewNoteConnected(nextReviewNoteConnected);
+        setGangnamConnected(nextGangnamConnected);
       })
       .catch(() => {
         if (!cancelled) {
           setReviewNoteConnected(false);
+          setGangnamConnected(false);
         }
       })
       .finally(() => {
@@ -638,6 +678,7 @@ export default function Home() {
     setSiteFormErrorMessage("");
     setIsConnectionModalOpen(true);
     void loadReviewNoteConnection();
+    void loadGangnamConnection();
   }
 
   function handleAddSite() {
@@ -699,6 +740,10 @@ export default function Home() {
 
       if (targetSite && isReviewNoteDomain(targetSite.domain)) {
         setReviewNoteConnected(false);
+      }
+
+      if (targetSite && isGangnamDomain(targetSite.domain)) {
+        setGangnamConnected(false);
       }
 
       setSiteConnections((current) => current.filter((site) => site.id !== siteId));
@@ -1063,7 +1108,7 @@ export default function Home() {
     setConnectionHelperMessage(
       "리뷰노트 로그인 창을 열고 있어요. 로그인 완료가 확인되면 자동으로 창이 닫혀요.",
     );
-    setIsLoginPending(true);
+    setLoginPendingSite("reviewnote");
 
     try {
       const response = await fetch("/api/reviewnote/login", {
@@ -1086,12 +1131,44 @@ export default function Home() {
       );
       setConnectionHelperMessage("");
     } finally {
-      setIsLoginPending(false);
+      setLoginPendingSite(null);
+    }
+  }
+
+  async function handleGangnamLogin() {
+    setConnectionErrorMessage("");
+    setConnectionHelperMessage(
+      "강남맛집 로그인 창에서 로그인해 주세요. 로그인 완료가 확인되면 자동으로 창이 닫혀요.",
+    );
+    setLoginPendingSite("gangnam");
+
+    try {
+      const response = await fetch("/api/gangnam/login", {
+        method: "POST",
+      });
+      const result = (await response.json()) as { message?: string };
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "강남맛집 로그인 연동에 실패했어요.");
+      }
+
+      setConnectionHelperMessage(result.message ?? "강남맛집 로그인 연동이 완료됐어요.");
+      setGangnamConnected(true);
+      await loadGangnamConnection();
+    } catch (error) {
+      setConnectionErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "강남맛집 로그인 연동 중 문제가 생겼어요.",
+      );
+      setConnectionHelperMessage("");
+    } finally {
+      setLoginPendingSite(null);
     }
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[linear-gradient(180deg,#ffeaf5_0%,#ffdceb_35%,#ffeaf7_100%)] text-[#7f355b]">
+    <main className="review-calendar-app min-h-screen overflow-hidden bg-[linear-gradient(180deg,#ffeaf5_0%,#ffdceb_35%,#ffeaf7_100%)] text-[#7f355b]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.8)_0,rgba(255,255,255,0)_16%),radial-gradient(circle_at_82%_10%,rgba(255,246,190,0.65)_0,rgba(255,246,190,0)_12%),radial-gradient(circle_at_80%_70%,rgba(229,214,255,0.75)_0,rgba(229,214,255,0)_16%),linear-gradient(135deg,rgba(255,255,255,0.14)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.14)_50%,rgba(255,255,255,0.14)_75%,transparent_75%,transparent)] bg-[length:auto,auto,auto,28px_28px] opacity-80" />
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 py-5 sm:px-6 lg:px-8">
         <header className="relative overflow-hidden rounded-[42px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,245,251,0.92))] p-4 shadow-[0_30px_80px_rgba(233,116,171,0.2)] backdrop-blur-xl sm:p-6">
@@ -1101,22 +1178,19 @@ export default function Home() {
 
           <div className="relative rounded-[38px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,245,250,0.98),rgba(255,238,247,0.88))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-8">
             <div>
-              <p className="font-display text-sm tracking-[0.18em] text-[#d7649f]">
-                체험단 일정 관리
-              </p>
-              <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,760px)_minmax(280px,1fr)] xl:items-start">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,760px)_minmax(280px,1fr)] xl:items-start">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <button
                     onClick={openRegisterModal}
                     className="relative min-h-[190px] overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] px-7 py-8 text-left text-white shadow-[0_24px_42px_rgba(239,139,192,0.34)] transition-transform hover:-translate-y-1"
                   >
                     <div className="absolute -right-5 -top-5 h-24 w-24 rounded-full bg-white/12" />
-                    <div className="flex items-start justify-between gap-5">
+                    <div className="relative z-10 flex items-start justify-between gap-5">
                       <div className="min-w-0">
                         <span className="block font-display text-[38px] leading-none">
                           체험단 등록
                         </span>
-                        <span className="mt-5 block max-w-[220px] text-base leading-8 text-white/92">
+                        <span className="mt-5 block max-w-[220px] text-base leading-7 text-white/92">
                           선정된 체험단 링크를 등록하고 일정을 바로 불러오세요
                         </span>
                       </div>
@@ -1133,12 +1207,12 @@ export default function Home() {
                     className="relative min-h-[190px] overflow-hidden rounded-[34px] border border-white/85 bg-white/94 px-7 py-8 text-left text-[#c4518a] shadow-[0_22px_38px_rgba(255,191,220,0.22)] transition-transform hover:-translate-y-1"
                   >
                     <div className="absolute -left-5 bottom-0 h-20 w-20 rounded-full bg-[#fff2f8]" />
-                    <div className="flex items-start justify-between gap-5">
+                    <div className="relative z-10 flex items-start justify-between gap-5">
                       <div className="min-w-0">
                         <span className="block font-display text-[38px] leading-none">
                           사이트 연동
                         </span>
-                        <span className="mt-5 block max-w-[220px] text-base leading-8 text-[#c97aa4]">
+                        <span className="mt-5 block max-w-[220px] text-base leading-7 text-[#c97aa4]">
                           체험단 사이트 로그인 상태를 연결하고 관리해요
                         </span>
                       </div>
@@ -1182,10 +1256,7 @@ export default function Home() {
         {activeDashboardTab === "calendar" ? (
           <section className="grid gap-8">
             <article className="relative overflow-hidden rounded-[42px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.76),rgba(255,244,250,0.94))] p-5 shadow-[0_30px_70px_rgba(233,116,171,0.18)] sm:p-6">
-              <SectionTitle
-                eyebrow="오늘 확인할 내용"
-                title="오늘의 체크 포인트"
-              />
+              <SectionTitle title="오늘의 체크 포인트" />
               <div className="mt-6 grid gap-4 lg:grid-cols-3">
                 {checkpointCards.map((card) => (
                   <CheckpointCard
@@ -1445,7 +1516,7 @@ export default function Home() {
             </article>
 
             <article className="relative overflow-hidden rounded-[42px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.76),rgba(255,244,250,0.94))] p-5 shadow-[0_30px_70px_rgba(233,116,171,0.18)] sm:p-6">
-              <SectionTitle eyebrow="전체 현황" title="진행 상태" />
+              <SectionTitle title="진행 상태" />
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
                 <StatCard
                   title="날짜 미정"
@@ -1691,27 +1762,44 @@ export default function Home() {
                 siteConnections.map((site) => {
                   const isSupportedSite = site.parserStatus === "supported";
                   const isReviewNoteSite = isReviewNoteDomain(site.domain);
-                  const statusLabel = isReviewNoteSite
+                  const isGangnamSite = isGangnamDomain(site.domain);
+                  const isLoginSite = isReviewNoteSite || isGangnamSite;
+                  const isConnected = isReviewNoteSite
+                    ? reviewNoteConnected
+                    : isGangnamSite
+                      ? gangnamConnected
+                      : false;
+                  const isThisLoginPending = isReviewNoteSite
+                    ? loginPendingSite === "reviewnote"
+                    : isGangnamSite
+                      ? loginPendingSite === "gangnam"
+                      : false;
+                  const statusLabel = isLoginSite
                     ? isSessionLoading
                       ? "상태 확인 중"
-                      : reviewNoteConnected
+                      : isConnected
                         ? "연동 완료"
                         : "연동 필요"
                     : isSupportedSite
                       ? "지원 가능"
                       : "파싱 준비 중";
-                  const statusTone = isReviewNoteSite
-                    ? reviewNoteConnected
+                  const statusTone = isLoginSite
+                    ? isConnected
                       ? "connected"
                       : "pending"
                     : isSupportedSite
                       ? "pending"
                       : "comingSoon";
-                  const description = isReviewNoteSite
-                    ? "선정 상세 링크 등록 시 체험 기간, 마감일, 연락처를 자동으로 불러와요."
+                  const description = isLoginSite
+                    ? `${site.siteName} 선정 상세 링크 등록 시 체험 기간, 마감일, 연락처를 자동으로 불러와요.`
                     : isSupportedSite
                       ? "지원 가능한 구조로 분류됐어요. 연동 기능이 준비되면 바로 사용할 수 있어요."
                       : "사이트는 등록됐지만, 이 도메인의 자동 로그인/상세 파싱은 아직 준비되지 않았어요.";
+                  const loginAction = isReviewNoteSite
+                    ? handleReviewNoteLogin
+                    : isGangnamSite
+                      ? handleGangnamLogin
+                      : undefined;
 
                   return (
                     <SiteConnectionCard
@@ -1725,16 +1813,18 @@ export default function Home() {
                         isSupportedSite ? "자동 등록 지원" : "자동 등록 준비 중"
                       }
                       actionLabel={
-                        isReviewNoteSite
-                          ? isLoginPending
-                            ? "로그인 창 준비 중..."
-                            : reviewNoteConnected
+                        isLoginSite
+                          ? isThisLoginPending
+                            ? "로그인 완료 대기 중..."
+                            : isConnected
                               ? "다시 연동하기"
                               : "로그인 연동"
                           : undefined
                       }
-                      actionDisabled={isReviewNoteSite ? isLoginPending : undefined}
-                      onAction={isReviewNoteSite ? handleReviewNoteLogin : undefined}
+                      actionDisabled={
+                        isLoginSite ? loginPendingSite !== null : undefined
+                      }
+                      onAction={loginAction}
                       onRemove={() => handleRemoveSite(site.id)}
                     />
                   );
@@ -1837,17 +1927,25 @@ function SectionTitle({
   title,
   action,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   action?: string;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <p className="font-display text-xs tracking-[0.18em] text-[#de6aa2]">
-          {eyebrow}
-        </p>
-        <h2 className="mt-2 text-2xl font-black text-[#8f315f]">{title}</h2>
+        {eyebrow ? (
+          <p className="font-display text-xs tracking-[0.18em] text-[#de6aa2]">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h2
+          className={`text-2xl font-black text-[#8f315f] ${
+            eyebrow ? "mt-2" : ""
+          }`}
+        >
+          {title}
+        </h2>
       </div>
       {action ? (
         <button className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)] transition-transform hover:-translate-y-0.5">

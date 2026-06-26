@@ -7,6 +7,7 @@ import {
   insertSiteConnection,
   listSiteConnections,
 } from "@/lib/db";
+import { clearGangnamSession } from "@/lib/gangnam/session";
 import { clearReviewNoteSession } from "@/lib/review-note/session";
 import type { ParserSupport, SiteConnection } from "@/types/site-connection";
 
@@ -40,7 +41,9 @@ function parseDomain(rawValue: string) {
 }
 
 function detectParserSupport(domain: string): ParserSupport {
-  return domain === "reviewnote.co.kr" ? "supported" : "unsupported";
+  return domain === "reviewnote.co.kr" || domain === "xn--939au0g4vj8sq.net"
+    ? "supported"
+    : "unsupported";
 }
 
 export async function GET() {
@@ -119,6 +122,10 @@ export async function DELETE(request: Request) {
 
   if (site?.domain === "reviewnote.co.kr") {
     await clearReviewNoteSession();
+  }
+
+  if (site?.domain === "xn--939au0g4vj8sq.net") {
+    await clearGangnamSession();
   }
 
   deleteSiteConnection(id);

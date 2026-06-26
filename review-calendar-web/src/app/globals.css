@@ -33,6 +33,50 @@ button {
   cursor: pointer;
 }
 
+.review-calendar-app {
+  font-size: 16px;
+}
+
+/*
+ * 칠판지우개 폰트는 작은 크기에서 획이 가늘어 보이므로, 화면의 큰 제목은
+ * 유지하고 본문·배지·버튼에 주로 쓰이는 작은 타이포 단계만 또렷하게 올린다.
+ */
+.review-calendar-app .text-xs {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.review-calendar-app .text-sm {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.review-calendar-app [class~="text-[10px]"] {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.review-calendar-app [class~="text-[11px]"] {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.review-calendar-app [class~="text-[13px]"] {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.review-calendar-app button,
+.review-calendar-app select,
+.review-calendar-app input {
+  font-weight: 700;
+}
+
+.review-calendar-app button[class*="rounded-full"],
+.review-calendar-app select[class*="rounded-full"] {
+  min-height: 42px;
+}
+
 ::selection {
   background: #ff95c6;
   color: #fff;

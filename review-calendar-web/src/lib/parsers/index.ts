@@ -1,7 +1,8 @@
+import { gangnamParser } from "@/lib/parsers/gangnam";
 import { reviewNoteParser } from "@/lib/parsers/review-note";
 import type { ParsedCampaign } from "@/lib/parsers/types";
 
-const parsers = [reviewNoteParser];
+const parsers = [reviewNoteParser, gangnamParser];
 
 export async function parseCampaignLink(rawUrl: string): Promise<ParsedCampaign> {
   let url: URL;

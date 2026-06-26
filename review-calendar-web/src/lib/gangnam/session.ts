@@ -2,11 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { launchVisibleBrowser } from "@/lib/browser";
 
-const REVIEW_NOTE_SAMPLE_URL = "https://www.reviewnote.co.kr/campaigns/1244064";
-const REVIEW_NOTE_STORAGE_DIR = path.join(process.cwd(), ".local");
-const REVIEW_NOTE_STORAGE_PATH = path.join(
-  REVIEW_NOTE_STORAGE_DIR,
-  "reviewnote-storage.json",
+const GANGNAM_BASE_URL = "https://xn--939au0g4vj8sq.net";
+const GANGNAM_LOGIN_URL = `${GANGNAM_BASE_URL}/bbs/login.php?url=%2Fcp%2F%3Fid%3D2207100`;
+const GANGNAM_STORAGE_DIR = path.join(process.cwd(), ".local");
+const GANGNAM_STORAGE_PATH = path.join(
+  GANGNAM_STORAGE_DIR,
+  "gangnam-storage.json",
 );
 
 type StorageCookie = {
@@ -24,12 +25,12 @@ type StorageState = {
 };
 
 async function ensureStorageDir() {
-  await fs.mkdir(REVIEW_NOTE_STORAGE_DIR, { recursive: true });
+  await fs.mkdir(GANGNAM_STORAGE_DIR, { recursive: true });
 }
 
 async function readStorageState(): Promise<StorageState | null> {
   try {
-    const raw = await fs.readFile(REVIEW_NOTE_STORAGE_PATH, "utf8");
+    const raw = await fs.readFile(GANGNAM_STORAGE_PATH, "utf8");
     return JSON.parse(raw) as StorageState;
   } catch {
     return null;
@@ -39,15 +40,15 @@ async function readStorageState(): Promise<StorageState | null> {
 function isCookieUsable(cookie: StorageCookie, hostname: string) {
   const expiresMs =
     cookie.expires === -1 ? Number.POSITIVE_INFINITY : cookie.expires * 1000;
+  const normalizedDomain = cookie.domain.replace(/^\./, "");
   const notExpired = expiresMs > Date.now();
   const domainMatch =
-    hostname === cookie.domain.replace(/^\./, "") ||
-    hostname.endsWith(cookie.domain.replace(/^\./, ""));
+    hostname === normalizedDomain || hostname.endsWith(normalizedDomain);
 
   return notExpired && domainMatch;
 }
 
-export async function hasReviewNoteSession() {
+export async function hasGangnamSession() {
   const state = await readStorageState();
 
   if (!state) {
@@ -55,11 +56,11 @@ export async function hasReviewNoteSession() {
   }
 
   return state.cookies.some((cookie) =>
-    isCookieUsable(cookie, "www.reviewnote.co.kr"),
+    isCookieUsable(cookie, "xn--939au0g4vj8sq.net"),
   );
 }
 
-export async function getReviewNoteCookieHeader() {
+export async function getGangnamCookieHeader() {
   const state = await readStorageState();
 
   if (!state) {
@@ -67,7 +68,7 @@ export async function getReviewNoteCookieHeader() {
   }
 
   const usableCookies = state.cookies.filter((cookie) =>
-    isCookieUsable(cookie, "www.reviewnote.co.kr"),
+    isCookieUsable(cookie, "xn--939au0g4vj8sq.net"),
   );
 
   if (!usableCookies.length) {
@@ -77,25 +78,26 @@ export async function getReviewNoteCookieHeader() {
   return usableCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }
 
-export async function clearReviewNoteSession() {
+export async function clearGangnamSession() {
   try {
-    await fs.unlink(REVIEW_NOTE_STORAGE_PATH);
+    await fs.unlink(GANGNAM_STORAGE_PATH);
   } catch {
     // 세션 파일이 없으면 무시한다.
   }
 }
 
-export async function launchReviewNoteLogin() {
+export async function launchGangnamLogin() {
   await ensureStorageDir();
 
   const browser = await launchVisibleBrowser();
   const context = await browser.newContext({
+    ignoreHTTPSErrors: true,
     viewport: null,
   });
   const page = await context.newPage();
 
   try {
-    await page.goto(REVIEW_NOTE_SAMPLE_URL, {
+    await page.goto(GANGNAM_LOGIN_URL, {
       waitUntil: "domcontentloaded",
       timeout: 120000,
     });
@@ -109,19 +111,26 @@ export async function launchReviewNoteLogin() {
       }
 
       try {
-        const status = await page.evaluate(async () => {
-          const response = await fetch("/api/campaign?id=1244064", {
-            credentials: "include",
-          });
-          return response.status;
+        loggedIn = await page.evaluate(() => {
+          const memberFlag = String(
+            (globalThis as typeof globalThis & { g5_is_member?: string })
+              .g5_is_member ?? "",
+          );
+          const bodyText = document.body?.innerText ?? "";
+
+          return (
+            Boolean(memberFlag) ||
+            bodyText.includes("로그아웃") ||
+            (!location.href.includes("/bbs/login.php") &&
+              document.cookie.includes("PHPSESSID"))
+          );
         });
 
-        if (status === 200) {
-          loggedIn = true;
+        if (loggedIn) {
           break;
         }
       } catch {
-        // 로그인 전에는 fetch가 실패하거나 401이 날 수 있다.
+        // 페이지 이동 중에는 평가가 실패할 수 있다.
       }
 
       await page.waitForTimeout(1000);
@@ -129,11 +138,11 @@ export async function launchReviewNoteLogin() {
 
     if (!loggedIn) {
       throw new Error(
-        "로그인 완료를 확인하지 못했어요. 로그인 후 창을 너무 빨리 닫았다면 다시 시도해 주세요.",
+        "강남맛집 로그인 완료를 확인하지 못했어요. 로그인 창을 너무 빨리 닫았다면 다시 시도해 주세요.",
       );
     }
 
-    await context.storageState({ path: REVIEW_NOTE_STORAGE_PATH });
+    await context.storageState({ path: GANGNAM_STORAGE_PATH });
   } finally {
     if (browser.isConnected()) {
       await browser.close();
@@ -142,6 +151,6 @@ export async function launchReviewNoteLogin() {
 
   return {
     ok: true,
-    message: "리뷰노트 로그인 세션을 저장했어요.",
+    message: "강남맛집 로그인 세션을 저장했어요.",
   };
 }
