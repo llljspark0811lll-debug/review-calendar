@@ -2,16 +2,28 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   deleteSiteConnection,
-  findSiteConnectionById,
   findSiteConnectionByDomain,
+  findSiteConnectionById,
   insertSiteConnection,
   listSiteConnections,
 } from "@/lib/db";
 import { clearGangnamSession } from "@/lib/gangnam/session";
+import { hasCampaignParserForDomain } from "@/lib/parsers";
 import { clearReviewNoteSession } from "@/lib/review-note/session";
+import {
+  findSiteLoginConnectorByDomain,
+  type SiteLoginConnectorId,
+} from "@/lib/site-login-connectors";
 import type { ParserSupport, SiteConnection } from "@/types/site-connection";
 
 export const runtime = "nodejs";
+
+const clearLoginSessionByConnectorId: Partial<
+  Record<SiteLoginConnectorId, () => Promise<void>>
+> = {
+  reviewnote: clearReviewNoteSession,
+  gangnam: clearGangnamSession,
+};
 
 function normalizeUrl(rawValue: string) {
   const trimmed = rawValue.trim();
@@ -41,9 +53,7 @@ function parseDomain(rawValue: string) {
 }
 
 function detectParserSupport(domain: string): ParserSupport {
-  return domain === "reviewnote.co.kr" || domain === "xn--939au0g4vj8sq.net"
-    ? "supported"
-    : "unsupported";
+  return hasCampaignParserForDomain(domain) ? "supported" : "unsupported";
 }
 
 export async function GET() {
@@ -119,13 +129,13 @@ export async function DELETE(request: Request) {
   }
 
   const site = findSiteConnectionById(id);
+  const connector = site ? findSiteLoginConnectorByDomain(site.domain) : undefined;
+  const clearLoginSession = connector
+    ? clearLoginSessionByConnectorId[connector.id]
+    : undefined;
 
-  if (site?.domain === "reviewnote.co.kr") {
-    await clearReviewNoteSession();
-  }
-
-  if (site?.domain === "xn--939au0g4vj8sq.net") {
-    await clearGangnamSession();
+  if (clearLoginSession) {
+    await clearLoginSession();
   }
 
   deleteSiteConnection(id);

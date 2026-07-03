@@ -1,6 +1,12 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  findSiteLoginConnectorByDomain,
+  siteLoginConnectors,
+  type SiteLoginConnector,
+  type SiteLoginConnectorId,
+} from "@/lib/site-login-connectors";
 import type { Campaign, CampaignStatus } from "@/types/campaign";
 import type { Holiday } from "@/types/holiday";
 import type { SiteConnection } from "@/types/site-connection";
@@ -14,6 +20,7 @@ const dashboardTabs = [
 ] as const;
 
 type DashboardTabId = (typeof dashboardTabs)[number]["id"];
+type LoginConnectionMap = Record<SiteLoginConnectorId, boolean>;
 
 type CheckpointTone = "pink" | "yellow" | "lavender";
 
@@ -121,10 +128,6 @@ function createCalendarCells(
   month: number,
 ): CalendarCell[] {
   const cells: CalendarCell[] = [];
-  const visibleCampaigns = campaigns.filter(
-    (campaign) =>
-      campaign.status === "unscheduled" || campaign.status === "scheduled",
-  );
   const holidayMap = new Map(holidays.map((holiday) => [holiday.date, holiday]));
   const firstDayOfMonth = new Date(year, month - 1, 1);
   const firstWeekDay = firstDayOfMonth.getDay();
@@ -139,145 +142,76 @@ function createCalendarCells(
   for (let day = 1; day <= daysInMonth; day += 1) {
     const iso = formatIsoDate(year, month, day);
     const holiday = holidayMap.get(iso);
-    const pickedCampaigns = visibleCampaigns.filter(
-      (campaign) => campaign.selectedDate?.slice(0, 10) === iso,
-    );
-    const deadlineCampaigns = visibleCampaigns.filter(
-      (campaign) => campaign.reviewDeadline === iso,
-    );
-    const activeCampaigns = visibleCampaigns.filter(
+    const activeCampaigns = campaigns.filter(
       (campaign) =>
         campaign.status === "unscheduled" &&
-        campaign.experienceStartDate <= iso && campaign.experienceEndDate >= iso,
+        campaign.experienceStartDate <= iso &&
+        campaign.experienceEndDate >= iso,
+    );
+    const deadlineCampaigns = campaigns.filter(
+      (campaign) =>
+        (campaign.status === "unscheduled" || campaign.status === "scheduled") &&
+        campaign.reviewDeadline === iso,
+    );
+    const pickedCampaigns = campaigns.filter(
+      (campaign) =>
+        campaign.status === "scheduled" &&
+        campaign.selectedDate?.slice(0, 10) === iso,
     );
 
-    const pickedIds = new Set(pickedCampaigns.map((campaign) => campaign.id));
-    const deadlineIds = new Set(deadlineCampaigns.map((campaign) => campaign.id));
-    const activeOnlyCampaigns = activeCampaigns.filter(
-      (campaign) => !pickedIds.has(campaign.id) && !deadlineIds.has(campaign.id),
-    );
-
+    const activeEntries = activeCampaigns.map((campaign) => campaign.title);
+    const deadlineEntries = deadlineCampaigns.map((campaign) => campaign.title);
     const pickedEntries = pickedCampaigns.map(
       (campaign) =>
         `방문 · ${campaign.title} ${formatDateTime(campaign.selectedDate).split(" ").at(-1) ?? ""}`.trim(),
     );
-    const deadlineEntries = deadlineCampaigns
-      .filter((campaign) => !pickedIds.has(campaign.id))
-      .map((campaign) => campaign.title);
-    const activeEntries = activeOnlyCampaigns.map((campaign) => campaign.title);
 
-    if (pickedCampaigns.length) {
+    const sections = [
+      activeCampaigns.length
+        ? {
+            label: `체험 ${activeCampaigns.length}건`,
+            entries: activeEntries,
+          }
+        : null,
+      deadlineCampaigns.length
+        ? {
+            label: `마감 ${deadlineCampaigns.length}건`,
+            entries: deadlineEntries,
+          }
+        : null,
+      pickedCampaigns.length
+        ? {
+            label: `방문 확정 ${pickedCampaigns.length}건`,
+            entries: pickedEntries,
+          }
+        : null,
+    ].filter((section): section is { label: string; entries: string[] } =>
+      Boolean(section),
+    );
+
+    if (sections.length) {
+      const type: CalendarTone = pickedCampaigns.length
+        ? "selected"
+        : deadlineCampaigns.length
+          ? "danger"
+          : activeCampaigns.length > 1
+            ? "lavender"
+            : "soft";
+
       cells.push({
         key: iso,
         dateIso: iso,
         day,
         holidayName: holiday?.name,
         isAlternativeHoliday: holiday?.isAlternative,
-        label:
-          pickedCampaigns.length > 1
-            ? `방문 확정 ${pickedCampaigns.length}건`
-            : "방문 확정",
-        entries: pickedEntries,
-        secondaryLabel: deadlineEntries.length
-          ? `마감 ${deadlineEntries.length}건`
-          : activeEntries.length
-            ? `체험가능 ${activeEntries.length}건`
-            : undefined,
-        secondaryEntries: deadlineEntries.length ? deadlineEntries : activeEntries,
-        type: "selected",
-        deco: "🎀",
-      });
-      continue;
-    }
-
-    if (deadlineCampaigns.length) {
-      cells.push({
-        key: iso,
-        dateIso: iso,
-        day,
-        holidayName: holiday?.name,
-        isAlternativeHoliday: holiday?.isAlternative,
-        label: activeEntries.length
-          ? `체험가능 ${activeEntries.length}건`
-          : deadlineCampaigns.length > 1
-            ? `리뷰 마감 ${deadlineCampaigns.length}건`
-            : "리뷰 마감",
-        entries: activeEntries.length ? activeEntries : deadlineEntries,
-        secondaryLabel:
-          activeEntries.length && deadlineEntries.length
-            ? `마감 ${deadlineEntries.length}건`
-            : undefined,
-        secondaryEntries:
-          activeEntries.length && deadlineEntries.length ? deadlineEntries : undefined,
-        tertiaryLabel:
-          pickedEntries.length && !activeEntries.length && !deadlineEntries.length
-            ? `방문 확정 ${pickedEntries.length}건`
-            : pickedEntries.length
-              ? `방문 확정 ${pickedEntries.length}건`
-              : undefined,
-        tertiaryEntries: pickedEntries.length ? pickedEntries : undefined,
-        type: "danger",
-        deco: "!",
-      });
-      continue;
-    }
-
-    if (activeCampaigns.length >= 2) {
-      cells.push({
-        key: iso,
-        dateIso: iso,
-        day,
-        holidayName: holiday?.name,
-        isAlternativeHoliday: holiday?.isAlternative,
-        label: `체험가능 ${activeCampaigns.length}건`,
-        entries: activeEntries,
-        secondaryLabel: pickedEntries.length
-          ? `방문 확정 ${pickedEntries.length}건`
-          : undefined,
-        secondaryEntries: pickedEntries.length ? pickedEntries : undefined,
-        type: "lavender",
-        deco: "✦",
-      });
-      continue;
-    }
-
-    if (activeCampaigns.length === 1) {
-      cells.push({
-        key: iso,
-        dateIso: iso,
-        day,
-        holidayName: holiday?.name,
-        isAlternativeHoliday: holiday?.isAlternative,
-        label: "체험가능 1건",
-        entries: activeEntries,
-        secondaryLabel: pickedEntries.length
-          ? `방문 확정 ${pickedEntries.length}건`
-          : undefined,
-        secondaryEntries: pickedEntries.length ? pickedEntries : undefined,
-        type: activeCampaigns[0].status === "unscheduled" ? "soft" : "primary",
-        deco: activeCampaigns[0].status === "unscheduled" ? "♡" : "★",
-      });
-      continue;
-    }
-
-    if (pickedCampaigns.length) {
-      cells.push({
-        key: iso,
-        dateIso: iso,
-        day,
-        holidayName: holiday?.name,
-        isAlternativeHoliday: holiday?.isAlternative,
-        label:
-          pickedCampaigns.length > 1
-            ? `방문 확정 ${pickedCampaigns.length}건`
-            : "방문 확정",
-        entries: pickedEntries,
-        secondaryLabel: deadlineEntries.length
-          ? `마감 ${deadlineEntries.length}건`
-          : undefined,
-        secondaryEntries: deadlineEntries.length ? deadlineEntries : undefined,
-        type: "selected",
-        deco: "🎀",
+        label: sections[0].label,
+        entries: sections[0].entries,
+        secondaryLabel: sections[1]?.label,
+        secondaryEntries: sections[1]?.entries,
+        tertiaryLabel: sections[2]?.label,
+        tertiaryEntries: sections[2]?.entries,
+        type,
+        deco: pickedCampaigns.length ? "🎀" : deadlineCampaigns.length ? "!" : "♡",
       });
       continue;
     }
@@ -319,12 +253,18 @@ function buildCheckpointSummary(campaigns: Campaign[], fallback: string) {
   return `${campaigns[0].title} 외 ${campaigns.length - 1}건`;
 }
 
-function isReviewNoteDomain(domain: string) {
-  return domain === "reviewnote.co.kr";
-}
+function createLoginConnectionMap(
+  valueOrEntries:
+    | boolean
+    | ReadonlyArray<readonly [SiteLoginConnectorId, boolean]> = false,
+) {
+  const entries = Array.isArray(valueOrEntries)
+    ? valueOrEntries
+    : siteLoginConnectors.map(
+        (connector) => [connector.id, valueOrEntries] as const,
+      );
 
-function isGangnamDomain(domain: string) {
-  return domain === "xn--939au0g4vj8sq.net";
+  return Object.fromEntries(entries) as LoginConnectionMap;
 }
 
 export default function Home() {
@@ -340,6 +280,7 @@ export default function Home() {
   const [selectedCampaignPage, setSelectedCampaignPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [campaignToDelete, setCampaignToDelete] = useState<Campaign | null>(null);
+  const [siteToRemove, setSiteToRemove] = useState<SiteConnection | null>(null);
   const [activeCheckpointId, setActiveCheckpointId] =
     useState<CheckpointCardData["id"] | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -355,20 +296,19 @@ export default function Home() {
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [scheduleErrorMessage, setScheduleErrorMessage] = useState("");
   const [siteFormErrorMessage, setSiteFormErrorMessage] = useState("");
-  const [loginPendingSite, setLoginPendingSite] = useState<
-    "reviewnote" | "gangnam" | null
-  >(null);
+  const [loginPendingSite, setLoginPendingSite] =
+    useState<SiteLoginConnectorId | null>(null);
   const [isBootstrapLoading, setIsBootstrapLoading] = useState(true);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
-  const [reviewNoteConnected, setReviewNoteConnected] = useState(false);
-  const [gangnamConnected, setGangnamConnected] = useState(false);
+  const [loginConnections, setLoginConnections] = useState<LoginConnectionMap>(
+    () => createLoginConnectionMap(false),
+  );
   const [holidaySyncEnabled, setHolidaySyncEnabled] = useState(false);
   const [isSchedulePending, setIsSchedulePending] = useState(false);
   const [isDeletePending, setIsDeletePending] = useState(false);
+  const [isSiteRemovePending, setIsSiteRemovePending] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const selectedCampaign =
-    campaigns.find((campaign) => campaign.id === selectedId) ?? campaigns[0] ?? null;
   const todayIso = formatIsoDate(
     today.getFullYear(),
     today.getMonth() + 1,
@@ -506,50 +446,23 @@ export default function Home() {
   })();
   const connectedSitesCount = useMemo(
     () =>
-      siteConnections.filter(
-        (site) =>
-          (isReviewNoteDomain(site.domain) && reviewNoteConnected) ||
-          (isGangnamDomain(site.domain) && gangnamConnected),
-      ).length,
-    [gangnamConnected, reviewNoteConnected, siteConnections],
+      siteConnections.filter((site) => {
+        const connector = findSiteLoginConnectorByDomain(site.domain);
+
+        return connector ? loginConnections[connector.id] : false;
+      }).length,
+    [loginConnections, siteConnections],
   );
 
-  async function loadReviewNoteConnection() {
-    setIsSessionLoading(true);
+  async function loadLoginConnection(connector: SiteLoginConnector) {
+    const response = await fetch(connector.sessionPath);
+    const result = (await response.json()) as { connected?: boolean };
 
-    try {
-      const response = await fetch("/api/reviewnote/session");
-      const result = (await response.json()) as { connected?: boolean };
-
-      if (!response.ok) {
-        throw new Error();
-      }
-
-      setReviewNoteConnected(Boolean(result.connected));
-    } catch {
-      setReviewNoteConnected(false);
-    } finally {
-      setIsSessionLoading(false);
+    if (!response.ok) {
+      throw new Error();
     }
-  }
 
-  async function loadGangnamConnection() {
-    setIsSessionLoading(true);
-
-    try {
-      const response = await fetch("/api/gangnam/session");
-      const result = (await response.json()) as { connected?: boolean };
-
-      if (!response.ok) {
-        throw new Error();
-      }
-
-      setGangnamConnected(Boolean(result.connected));
-    } catch {
-      setGangnamConnected(false);
-    } finally {
-      setIsSessionLoading(false);
-    }
+    return Boolean(result.connected);
   }
 
   useEffect(() => {
@@ -591,31 +504,25 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([
-      fetch("/api/reviewnote/session").then(async (response) => {
-        const result = (await response.json()) as { connected?: boolean };
-
-        return response.ok ? Boolean(result.connected) : false;
+    Promise.all(
+      siteLoginConnectors.map(async (connector) => {
+        try {
+          return [connector.id, await loadLoginConnection(connector)] as const;
+        } catch {
+          return [connector.id, false] as const;
+        }
       }),
-      fetch("/api/gangnam/session").then(async (response) => {
-        const result = (await response.json()) as { connected?: boolean };
-
-        return response.ok ? Boolean(result.connected) : false;
-      }),
-    ])
-      .then(([nextReviewNoteConnected, nextGangnamConnected]) => {
-
+    )
+      .then((entries) => {
         if (cancelled) {
           return;
         }
 
-        setReviewNoteConnected(nextReviewNoteConnected);
-        setGangnamConnected(nextGangnamConnected);
+        setLoginConnections(createLoginConnectionMap(entries));
       })
       .catch(() => {
         if (!cancelled) {
-          setReviewNoteConnected(false);
-          setGangnamConnected(false);
+          setLoginConnections(createLoginConnectionMap(false));
         }
       })
       .finally(() => {
@@ -677,8 +584,18 @@ export default function Home() {
     setConnectionHelperMessage("");
     setSiteFormErrorMessage("");
     setIsConnectionModalOpen(true);
-    void loadReviewNoteConnection();
-    void loadGangnamConnection();
+    setIsSessionLoading(true);
+    void Promise.all(
+      siteLoginConnectors.map(async (connector) => {
+        try {
+          return [connector.id, await loadLoginConnection(connector)] as const;
+        } catch {
+          return [connector.id, false] as const;
+        }
+      }),
+    )
+      .then((entries) => setLoginConnections(createLoginConnectionMap(entries)))
+      .finally(() => setIsSessionLoading(false));
   }
 
   function handleAddSite() {
@@ -715,11 +632,11 @@ export default function Home() {
 
         if (nextSite.parserStatus === "supported") {
           setConnectionHelperMessage(
-            "지원 사이트예요. 이제 로그인 연동을 진행하면 링크 자동 등록에 사용할 수 있어요.",
+            "이 사이트는 자동 등록 파서가 준비돼 있어요. 로그인 연동을 진행하면 선정 링크 등록에 사용할 수 있어요.",
           );
         } else {
           setConnectionHelperMessage(
-            "사이트 목록에는 추가됐어요. 이 사이트는 아직 자동 파싱이 준비되지 않아 추후 지원이 필요해요.",
+            "사이트 목록에는 추가됐어요. 아직 이 도메인의 자동 등록 파서는 준비 중이에요.",
           );
         }
       } catch (error) {
@@ -730,23 +647,53 @@ export default function Home() {
     })();
   }
 
-  function handleRemoveSite(siteId: string) {
+  function handleRequestRemoveSite(site: SiteConnection) {
+    setConnectionErrorMessage("");
+    setConnectionHelperMessage("");
+    setSiteToRemove(site);
+  }
+
+  function handleConfirmRemoveSite() {
+    if (!siteToRemove) {
+      return;
+    }
+
+    setIsSiteRemovePending(true);
+    setConnectionErrorMessage("");
+    setConnectionHelperMessage("");
+
     void (async () => {
-      const targetSite = siteConnections.find((site) => site.id === siteId);
+      try {
+        const response = await fetch(`/api/site-connections?id=${siteToRemove.id}`, {
+          method: "DELETE",
+        });
+        const result = (await response.json()) as { message?: string };
 
-      await fetch(`/api/site-connections?id=${siteId}`, {
-        method: "DELETE",
-      });
+        if (!response.ok) {
+          throw new Error(result.message ?? "사이트 제거 중 문제가 생겼어요.");
+        }
 
-      if (targetSite && isReviewNoteDomain(targetSite.domain)) {
-        setReviewNoteConnected(false);
+        const connector = findSiteLoginConnectorByDomain(siteToRemove.domain);
+
+        if (connector) {
+          setLoginConnections((current) => ({
+            ...current,
+            [connector.id]: false,
+          }));
+        }
+
+        setSiteConnections((current) =>
+          current.filter((site) => site.id !== siteToRemove.id),
+        );
+        setConnectionHelperMessage(`${siteToRemove.siteName} 사이트를 제거했어요.`);
+        setSiteToRemove(null);
+      } catch (error) {
+        setConnectionErrorMessage(
+          error instanceof Error ? error.message : "사이트 제거 중 문제가 생겼어요.",
+        );
+      } finally {
+        setIsSiteRemovePending(false);
       }
-
-      if (targetSite && isGangnamDomain(targetSite.domain)) {
-        setGangnamConnected(false);
-      }
-
-      setSiteConnections((current) => current.filter((site) => site.id !== siteId));
     })();
   }
 
@@ -894,14 +841,14 @@ export default function Home() {
         }
 
         setCampaigns((current) =>
-          current.map((campaign) =>
-            campaign.id === selectedCampaign.id
+          current.map((item) =>
+            item.id === campaign.id
               ? {
-                  ...campaign,
+                  ...item,
                   selectedDate,
                   status: "scheduled",
                 }
-              : campaign,
+              : item,
           ),
         );
         setScheduleMessage(
@@ -1103,63 +1050,35 @@ export default function Home() {
     })();
   }
 
-  async function handleReviewNoteLogin() {
+  async function handleSiteLogin(connector: SiteLoginConnector) {
     setConnectionErrorMessage("");
-    setConnectionHelperMessage(
-      "리뷰노트 로그인 창을 열고 있어요. 로그인 완료가 확인되면 자동으로 창이 닫혀요.",
-    );
-    setLoginPendingSite("reviewnote");
+    setConnectionHelperMessage(connector.openingMessage);
+    setLoginPendingSite(connector.id);
 
     try {
-      const response = await fetch("/api/reviewnote/login", {
+      const response = await fetch(connector.loginPath, {
         method: "POST",
       });
       const result = (await response.json()) as { message?: string };
 
       if (!response.ok) {
-        throw new Error(result.message ?? "리뷰노트 로그인 연동에 실패했어요.");
+        throw new Error(result.message ?? `${connector.displayName} 로그인 연동에 실패했어요.`);
       }
 
-      setConnectionHelperMessage(result.message ?? "리뷰노트 로그인 연동이 완료됐어요.");
-      setReviewNoteConnected(true);
-      await loadReviewNoteConnection();
+      setConnectionHelperMessage(result.message ?? connector.successMessage);
+      setLoginConnections((current) => ({
+        ...current,
+        [connector.id]: true,
+      }));
+
+      const connected = await loadLoginConnection(connector);
+      setLoginConnections((current) => ({
+        ...current,
+        [connector.id]: connected,
+      }));
     } catch (error) {
       setConnectionErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "리뷰노트 로그인 연동 중 문제가 생겼어요.",
-      );
-      setConnectionHelperMessage("");
-    } finally {
-      setLoginPendingSite(null);
-    }
-  }
-
-  async function handleGangnamLogin() {
-    setConnectionErrorMessage("");
-    setConnectionHelperMessage(
-      "강남맛집 로그인 창에서 로그인해 주세요. 로그인 완료가 확인되면 자동으로 창이 닫혀요.",
-    );
-    setLoginPendingSite("gangnam");
-
-    try {
-      const response = await fetch("/api/gangnam/login", {
-        method: "POST",
-      });
-      const result = (await response.json()) as { message?: string };
-
-      if (!response.ok) {
-        throw new Error(result.message ?? "강남맛집 로그인 연동에 실패했어요.");
-      }
-
-      setConnectionHelperMessage(result.message ?? "강남맛집 로그인 연동이 완료됐어요.");
-      setGangnamConnected(true);
-      await loadGangnamConnection();
-    } catch (error) {
-      setConnectionErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "강남맛집 로그인 연동 중 문제가 생겼어요.",
+        error instanceof Error ? error.message : connector.errorMessage,
       );
       setConnectionHelperMessage("");
     } finally {
@@ -1700,7 +1619,7 @@ export default function Home() {
                     </h3>
                     <p className="mt-2 text-sm leading-6 text-[#8a5d75]">
                       체험단 사이트 이름과 주소를 직접 등록해 목록으로 관리하세요.
-                      로그인 자동화와 상세 파싱은 지원 사이트부터 순차적으로 붙습니다.
+                      사이트별 자동 등록 파서가 준비된 곳은 선정 링크를 바로 불러올 수 있어요.
                     </p>
                   </div>
                   <Badge tone="lavender">사용자 추가형 관리</Badge>
@@ -1714,7 +1633,7 @@ export default function Home() {
                     <input
                       value={siteNameValue}
                       onChange={(event) => setSiteNameValue(event.target.value)}
-                      placeholder="예: 리뷰노트"
+                      placeholder="예: 리뷰노트, 강남맛집"
                       className="mt-2 w-full rounded-[18px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-3 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
                     />
                   </label>
@@ -1761,45 +1680,39 @@ export default function Home() {
               {siteConnections.length ? (
                 siteConnections.map((site) => {
                   const isSupportedSite = site.parserStatus === "supported";
-                  const isReviewNoteSite = isReviewNoteDomain(site.domain);
-                  const isGangnamSite = isGangnamDomain(site.domain);
-                  const isLoginSite = isReviewNoteSite || isGangnamSite;
-                  const isConnected = isReviewNoteSite
-                    ? reviewNoteConnected
-                    : isGangnamSite
-                      ? gangnamConnected
-                      : false;
-                  const isThisLoginPending = isReviewNoteSite
-                    ? loginPendingSite === "reviewnote"
-                    : isGangnamSite
-                      ? loginPendingSite === "gangnam"
-                      : false;
-                  const statusLabel = isLoginSite
+                  const loginConnector = findSiteLoginConnectorByDomain(site.domain);
+                  const isConnected = loginConnector
+                    ? loginConnections[loginConnector.id]
+                    : false;
+                  const isThisLoginPending = loginConnector
+                    ? loginPendingSite === loginConnector.id
+                    : false;
+                  const statusLabel = loginConnector
                     ? isSessionLoading
                       ? "상태 확인 중"
                       : isConnected
                         ? "연동 완료"
                         : "연동 필요"
                     : isSupportedSite
-                      ? "지원 가능"
+                      ? "자동 등록 가능"
                       : "파싱 준비 중";
-                  const statusTone = isLoginSite
+                  const statusTone = loginConnector
                     ? isConnected
                       ? "connected"
                       : "pending"
                     : isSupportedSite
                       ? "pending"
                       : "comingSoon";
-                  const description = isLoginSite
+                  const description = loginConnector
                     ? `${site.siteName} 선정 상세 링크 등록 시 체험 기간, 마감일, 연락처를 자동으로 불러와요.`
                     : isSupportedSite
-                      ? "지원 가능한 구조로 분류됐어요. 연동 기능이 준비되면 바로 사용할 수 있어요."
+                      ? "이 도메인의 자동 등록 파서가 준비돼 있어요. 선정 상세 링크를 등록하면 정보를 불러올 수 있어요."
                       : "사이트는 등록됐지만, 이 도메인의 자동 로그인/상세 파싱은 아직 준비되지 않았어요.";
-                  const loginAction = isReviewNoteSite
-                    ? handleReviewNoteLogin
-                    : isGangnamSite
-                      ? handleGangnamLogin
-                      : undefined;
+                  const loginAction = loginConnector
+                    ? () => {
+                        void handleSiteLogin(loginConnector);
+                      }
+                    : undefined;
 
                   return (
                     <SiteConnectionCard
@@ -1813,7 +1726,7 @@ export default function Home() {
                         isSupportedSite ? "자동 등록 지원" : "자동 등록 준비 중"
                       }
                       actionLabel={
-                        isLoginSite
+                        loginConnector
                           ? isThisLoginPending
                             ? "로그인 완료 대기 중..."
                             : isConnected
@@ -1822,10 +1735,10 @@ export default function Home() {
                           : undefined
                       }
                       actionDisabled={
-                        isLoginSite ? loginPendingSite !== null : undefined
+                        loginConnector ? loginPendingSite !== null : undefined
                       }
                       onAction={loginAction}
-                      onRemove={() => handleRemoveSite(site.id)}
+                      onRemove={() => handleRequestRemoveSite(site)}
                     />
                   );
                 })
@@ -1891,6 +1804,24 @@ export default function Home() {
             }
           }}
           onConfirm={handleConfirmDeleteCampaign}
+        />
+      ) : null}
+
+      {siteToRemove ? (
+        <RemoveSiteConfirmModal
+          site={siteToRemove}
+          hasLoginSession={(() => {
+            const connector = findSiteLoginConnectorByDomain(siteToRemove.domain);
+
+            return connector ? loginConnections[connector.id] : false;
+          })()}
+          isPending={isSiteRemovePending}
+          onClose={() => {
+            if (!isSiteRemovePending) {
+              setSiteToRemove(null);
+            }
+          }}
+          onConfirm={handleConfirmRemoveSite}
         />
       ) : null}
     </main>
@@ -2737,6 +2668,81 @@ function DeleteCampaignConfirmModal({
             className="inline-flex min-w-[112px] items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-4 py-2 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? "삭제 중..." : "진짜 삭제하기"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RemoveSiteConfirmModal({
+  site,
+  hasLoginSession,
+  isPending,
+  onClose,
+  onConfirm,
+}: {
+  site: SiteConnection;
+  hasLoginSession: boolean;
+  isPending: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
+              사이트 제거 확인
+            </p>
+            <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
+              연동 목록에서 제거할까요?
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={isPending}
+            className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            닫기
+          </button>
+        </div>
+
+        <div className="mt-5 rounded-[24px] border border-[#ffd4e7] bg-[#fff8fc] p-4">
+          <div className="flex flex-wrap gap-2">
+            <Badge>{site.parserStatus === "supported" ? "자동 등록 지원" : "준비 중"}</Badge>
+            {hasLoginSession ? <Badge tone="mint">로그인 연동 중</Badge> : null}
+          </div>
+          <h3 className="mt-3 text-2xl font-black text-[#8d315f]">
+            {site.siteName}
+          </h3>
+          <p className="mt-2 text-sm font-bold text-[#b05b86]">{site.domain}</p>
+          <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
+            제거하면 이 사이트의 링크를 새로 등록할 수 없고, 다시 사용하려면 사이트를
+            다시 추가해야 해요.
+          </p>
+          {hasLoginSession ? (
+            <p className="mt-3 rounded-[18px] bg-[#fff0bf] px-4 py-3 text-sm font-bold leading-6 text-[#8b5e1c]">
+              저장된 로그인 연동도 함께 해제돼요.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={isPending}
+            className="inline-flex min-w-[96px] items-center justify-center whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c55a90] shadow-[0_10px_18px_rgba(255,190,219,0.25)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            취소
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isPending}
+            className="inline-flex min-w-[112px] items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-4 py-2 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPending ? "제거 중..." : "제거하기"}
           </button>
         </div>
       </div>

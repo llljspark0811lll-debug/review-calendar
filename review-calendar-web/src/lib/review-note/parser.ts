@@ -26,10 +26,15 @@ type ReviewNoteCampaignResponse = {
 
 function formatDateString(input: string | undefined | null, dayOffset = 0) {
   if (!input) {
-    return "2026-06-03";
+    throw new Error("체험단 일정 정보를 확인하지 못했어요.");
   }
 
   const date = new Date(input);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("체험단 날짜 형식이 올바르지 않아요.");
+  }
+
   date.setDate(date.getDate() + dayOffset);
 
   const year = date.getFullYear();
@@ -68,7 +73,9 @@ function buildMemo(data: ReviewNoteCampaignResponse) {
     data.sort ? `유형: ${data.sort}` : "",
     data.city ? `지역: ${data.city}` : "",
     data.category?.title ? `카테고리: ${data.category.title}` : "",
-    data.contact ? "담당자 연락처 파싱 완료" : "담당자 연락처가 없거나 로그인 범위 밖일 수 있음",
+    data.contact
+      ? "업체 연락처 파싱 완료"
+      : "업체 연락처가 없거나 로그인 권한 밖일 수 있음",
   ].filter(Boolean);
 
   return parts.join(" / ");
@@ -124,11 +131,14 @@ export async function parseReviewNoteCampaign(
     reviewDeadline,
     selectedDate: null,
     capacity: "미정",
-    companyName: compactText(data.user?.companyName) || compactText(data.title) || "리뷰노트 업체",
+    companyName:
+      compactText(data.user?.companyName) ||
+      compactText(data.title) ||
+      "리뷰노트 업체",
     companyPhone: phone,
     address: address || "주소 정보 없음",
     memo: buildMemo(data),
-    sticker: "리뷰노트 실파싱",
+    sticker: "리뷰노트",
     accent: "from-[#ffa1cb] via-[#ffd0e4] to-[#fff0f7]",
     contactLocked: !phone,
   };

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           message:
-            "등록된 사이트지만 아직 자동 등록을 지원하지 않아요. 지원 사이트부터 순차적으로 확장할 예정이에요.",
+            "등록된 사이트지만 아직 자동 등록을 지원하지 않아요. 지원 사이트를 순차적으로 확장할 예정이에요.",
         },
         { status: 400 },
       );

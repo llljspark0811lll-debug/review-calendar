@@ -82,7 +82,7 @@ export async function clearGangnamSession() {
   try {
     await fs.unlink(GANGNAM_STORAGE_PATH);
   } catch {
-    // 세션 파일이 없으면 무시한다.
+    // 저장된 세션 파일이 없으면 무시한다.
   }
 }
 

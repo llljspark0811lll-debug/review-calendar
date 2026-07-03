@@ -119,6 +119,15 @@ export function listCampaigns() {
   return rows.map(mapCampaign);
 }
 
+export function findCampaignById(id: string) {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT * FROM campaigns WHERE id = ?")
+    .get(id) as CampaignRow | undefined;
+
+  return row ? mapCampaign(row) : undefined;
+}
+
 export function insertCampaign(campaign: Campaign) {
   const db = getDb();
   const createdAt = new Date().toISOString();

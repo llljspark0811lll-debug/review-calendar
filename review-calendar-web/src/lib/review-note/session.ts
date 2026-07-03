@@ -81,7 +81,7 @@ export async function clearReviewNoteSession() {
   try {
     await fs.unlink(REVIEW_NOTE_STORAGE_PATH);
   } catch {
-    // 세션 파일이 없으면 무시한다.
+    // 저장된 세션 파일이 없으면 무시한다.
   }
 }
 
@@ -121,7 +121,7 @@ export async function launchReviewNoteLogin() {
           break;
         }
       } catch {
-        // 로그인 전에는 fetch가 실패하거나 401이 날 수 있다.
+        // 로그인 전에는 fetch가 실패하거나 401을 반환할 수 있다.
       }
 
       await page.waitForTimeout(1000);
@@ -129,7 +129,7 @@ export async function launchReviewNoteLogin() {
 
     if (!loggedIn) {
       throw new Error(
-        "로그인 완료를 확인하지 못했어요. 로그인 후 창을 너무 빨리 닫았다면 다시 시도해 주세요.",
+        "로그인 완료를 확인하지 못했어요. 로그인 창을 너무 빨리 닫았다면 다시 시도해 주세요.",
       );
     }
 

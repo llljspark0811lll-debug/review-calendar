@@ -11,8 +11,8 @@ type DataGoKrHolidayItem = {
 };
 
 function getXmlTagValue(source: string, tagName: string) {
-  const match = source.match(new RegExp(`<${tagName}>(.*?)</${tagName}>`));
-  return match?.[1]?.trim() ?? "";
+  const match = source.match(new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`));
+  return decodeXml(match?.[1]?.trim() ?? "");
 }
 
 function decodeXml(value: string) {
@@ -24,16 +24,40 @@ function decodeXml(value: string) {
     .replaceAll("&#39;", "'");
 }
 
+function assertSuccessfulHolidayResponse(xml: string) {
+  const resultCode = getXmlTagValue(xml, "resultCode");
+  const resultMsg = getXmlTagValue(xml, "resultMsg");
+  const returnReasonCode = getXmlTagValue(xml, "returnReasonCode");
+  const returnAuthMsg = getXmlTagValue(xml, "returnAuthMsg");
+
+  if (returnReasonCode || returnAuthMsg) {
+    throw new Error(
+      `\uacf5\ud734\uc77c API \uc778\uc99d\uc5d0 \uc2e4\ud328\ud588\uc5b4\uc694. ${returnAuthMsg || returnReasonCode}`,
+    );
+  }
+
+  if (resultCode && resultCode !== "00") {
+    throw new Error(
+      `\uacf5\ud734\uc77c API\uac00 \uc624\ub958\ub97c \ubc18\ud658\ud588\uc5b4\uc694. ${resultMsg || resultCode}`,
+    );
+  }
+}
+
 function parseHolidayItems(xml: string) {
   const itemBlocks = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
 
   return itemBlocks
     .map((block) => ({
       locdate: getXmlTagValue(block, "locdate"),
-      dateName: decodeXml(getXmlTagValue(block, "dateName")),
+      dateName: getXmlTagValue(block, "dateName"),
       isHoliday: getXmlTagValue(block, "isHoliday"),
     }))
-    .filter((item) => item.locdate && item.dateName);
+    .filter(
+      (item) =>
+        /^\d{8}$/.test(item.locdate) &&
+        Boolean(item.dateName) &&
+        item.isHoliday === "Y",
+    );
 }
 
 function toIsoDate(compactDate: string) {
@@ -41,11 +65,11 @@ function toIsoDate(compactDate: string) {
 }
 
 function classifyHoliday(name: string): HolidayType {
-  if (name.includes("대체공휴일")) {
+  if (name.includes("\ub300\uccb4\uacf5\ud734\uc77c")) {
     return "temporary_holiday";
   }
 
-  if (name.includes("선거")) {
+  if (name.includes("\uc120\uac70")) {
     return "election_day";
   }
 
@@ -53,18 +77,33 @@ function classifyHoliday(name: string): HolidayType {
 }
 
 function isAlternativeHoliday(name: string) {
-  return name.includes("대체공휴일");
+  return name.includes("\ub300\uccb4\uacf5\ud734\uc77c");
 }
 
 function buildHolidayId(date: string, name: string) {
   return `holiday-${date}-${name.replaceAll(/\s+/g, "-")}`;
 }
 
+function toHoliday(item: DataGoKrHolidayItem): Omit<Holiday, "createdAt" | "updatedAt"> {
+  const date = toIsoDate(item.locdate);
+
+  return {
+    id: buildHolidayId(date, item.dateName),
+    date,
+    name: item.dateName,
+    type: classifyHoliday(item.dateName),
+    isAlternative: isAlternativeHoliday(item.dateName),
+    isPublicHoliday: true,
+    source: "data_go_kr",
+    sourceUpdatedAt: new Date().toISOString(),
+  };
+}
+
 export async function fetchOfficialHolidaysByYear(
   year: number,
   serviceKey: string,
 ) {
-  const items: DataGoKrHolidayItem[] = [];
+  const holidaysById = new Map<string, Omit<Holiday, "createdAt" | "updatedAt">>();
 
   for (let month = 1; month <= 12; month += 1) {
     const url = new URL(HOLIDAY_SERVICE_URL);
@@ -79,28 +118,23 @@ export async function fetchOfficialHolidaysByYear(
     });
 
     if (!response.ok) {
-      throw new Error(`공휴일 API 호출에 실패했어요. (${response.status})`);
+      throw new Error(
+        `\uacf5\ud734\uc77c API \ud638\ucd9c\uc5d0 \uc2e4\ud328\ud588\uc5b4\uc694. (${response.status})`,
+      );
     }
 
     const xml = await response.text();
-    items.push(...parseHolidayItems(xml));
+    assertSuccessfulHolidayResponse(xml);
+
+    for (const item of parseHolidayItems(xml)) {
+      const holiday = toHoliday(item);
+      holidaysById.set(holiday.id, holiday);
+    }
   }
 
-  return items
-    .filter((item) => item.isHoliday === "Y")
-    .map((item): Omit<Holiday, "createdAt" | "updatedAt"> => {
-      const date = toIsoDate(item.locdate);
-      return {
-        id: buildHolidayId(date, item.dateName),
-        date,
-        name: item.dateName,
-        type: classifyHoliday(item.dateName),
-        isAlternative: isAlternativeHoliday(item.dateName),
-        isPublicHoliday: true,
-        source: "data_go_kr",
-        sourceUpdatedAt: new Date().toISOString(),
-      };
-    });
+  return Array.from(holidaysById.values()).sort((left, right) =>
+    left.date.localeCompare(right.date) || left.name.localeCompare(right.name),
+  );
 }
 
 export async function ensureHolidayCoverageForYears(years: number[]) {
@@ -124,14 +158,19 @@ async function ensureHolidayCoverage(
     return { synced: false, reason: "missing-service-key" as const };
   }
 
+  const syncedYears: number[] = [];
+  const skippedYears: number[] = [];
+
   for (const year of years) {
     if (!forceRefresh && countHolidaysByYear(year) > 0) {
+      skippedYears.push(year);
       continue;
     }
 
     const holidays = await fetchOfficialHolidaysByYear(year, serviceKey);
     upsertHolidays(holidays);
+    syncedYears.push(year);
   }
 
-  return { synced: true as const };
+  return { synced: true as const, syncedYears, skippedYears };
 }

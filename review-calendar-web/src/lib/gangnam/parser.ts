@@ -32,7 +32,10 @@ function extractDetailValue(html: string, label: string) {
   return compactText(
     extractMatch(
       html,
-      new RegExp(`<dt>\\s*${escapedLabel}\\s*<\\/dt>\\s*<dd[^>]*>([\\s\\S]*?)<\\/dd>`, "i"),
+      new RegExp(
+        `<dt>\\s*${escapedLabel}\\s*<\\/dt>\\s*<dd[^>]*>([\\s\\S]*?)<\\/dd>`,
+        "i",
+      ),
     ),
   );
 }
@@ -74,7 +77,7 @@ function extractPhone(html: string) {
 
 function extractAddress(visitInfo: string) {
   const addressMatch = visitInfo.match(
-    /((?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)[^\n]*?(?:\d|층|호)[^\n]*)/,
+    /((?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)[^\n]*?(?:\d|층)[^\n]*)/,
   );
 
   return addressMatch?.[1]?.trim() ?? "";
@@ -90,8 +93,7 @@ export async function parseGangnamCampaign(
     throw new Error("강남맛집 로그인이 먼저 필요해요.");
   }
 
-  // 강남맛집 서버는 일부 Node 인증서 체인에서 검증이 실패한다.
-  // 이 파서 호출에 필요한 요청 직전에만 환경값을 보정한다.
+  // 강남맛집 서버 인증서 체인 검증이 Node 환경에서 실패하는 경우가 있어 요청 직전에 보정한다.
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
   const response = await fetch(`https://${GANGNAM_HOST}/cp/?id=${campaignId}`, {
@@ -145,7 +147,7 @@ export async function parseGangnamCampaign(
   const visitInfo = extractDetailValue(html, "방문 및 예약");
   const address = extractAddress(visitInfo);
   const capacityMatch = html.match(
-    /신청자\s*<em[^>]*id="ask_count"[^>]*>\s*(\d+)\s*<\/em>\s*\/\s*(\d+)/i,
+    /신청\s*<em[^>]*id="ask_count"[^>]*>\s*(\d+)\s*<\/em>\s*\/\s*(\d+)/i,
   );
   const capacity = capacityMatch ? `${capacityMatch[1]}/${capacityMatch[2]}` : "미정";
 
@@ -164,7 +166,7 @@ export async function parseGangnamCampaign(
     companyPhone: phone,
     address: address || "주소 정보 확인 필요",
     memo: visitInfo || "방문 및 예약 안내를 확인해 주세요.",
-    sticker: "강남맛집 스파클",
+    sticker: "강남맛집",
     accent: "from-[#ffb86b] via-[#ffd6a8] to-[#fff2df]",
     contactLocked: false,
   };

@@ -4,6 +4,23 @@ import type { ParsedCampaign } from "@/lib/parsers/types";
 
 const parsers = [reviewNoteParser, gangnamParser];
 
+function normalizeHostname(hostname: string) {
+  return hostname.trim().replace(/^www\./, "");
+}
+
+function findParser(url: URL) {
+  return parsers.find((item) => item.canHandle(url));
+}
+
+export function hasCampaignParserForDomain(domain: string) {
+  try {
+    const url = new URL(`https://${normalizeHostname(domain)}/`);
+    return Boolean(findParser(url));
+  } catch {
+    return false;
+  }
+}
+
 export async function parseCampaignLink(rawUrl: string): Promise<ParsedCampaign> {
   let url: URL;
 
@@ -13,10 +30,10 @@ export async function parseCampaignLink(rawUrl: string): Promise<ParsedCampaign>
     throw new Error("올바른 링크 형식이 아니에요.");
   }
 
-  const parser = parsers.find((item) => item.canHandle(url));
+  const parser = findParser(url);
 
   if (!parser) {
-    throw new Error("아직 지원하지 않는 사이트예요.");
+    throw new Error("아직 자동 등록 파서가 준비되지 않은 사이트예요.");
   }
 
   return parser.parse(url);

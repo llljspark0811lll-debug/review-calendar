@@ -4,6 +4,10 @@ import { refreshHolidayCoverageForYears } from "@/lib/holidays";
 
 export const runtime = "nodejs";
 
+function isIsoDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get("startDate");
@@ -11,20 +15,26 @@ export async function GET(request: Request) {
 
   if (!startDate || !endDate) {
     return NextResponse.json(
-      { message: "startDate와 endDate가 필요해요." },
+      {
+        message:
+          "startDate\uc640 endDate\uac00 \ud544\uc694\ud574\uc694.",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!isIsoDate(startDate) || !isIsoDate(endDate) || startDate > endDate) {
+    return NextResponse.json(
+      {
+        message:
+          "\ub0a0\uc9dc \ud615\uc2dd\uc774 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc544\uc694.",
+      },
       { status: 400 },
     );
   }
 
   const startYear = Number.parseInt(startDate.slice(0, 4), 10);
   const endYear = Number.parseInt(endDate.slice(0, 4), 10);
-
-  if (Number.isNaN(startYear) || Number.isNaN(endYear)) {
-    return NextResponse.json(
-      { message: "날짜 형식이 올바르지 않아요." },
-      { status: 400 },
-    );
-  }
 
   const years: number[] = [];
   for (let year = startYear; year <= endYear; year += 1) {
