@@ -1,5 +1,12 @@
 # Node / Next.js
 review-calendar-web/node_modules/
+review-calendar-web/.pnp
+review-calendar-web/.pnp.*
+review-calendar-web/.yarn/*
+!review-calendar-web/.yarn/patches
+!review-calendar-web/.yarn/plugins
+!review-calendar-web/.yarn/releases
+!review-calendar-web/.yarn/versions
 review-calendar-web/.next/
 review-calendar-web/out/
 review-calendar-web/build/
@@ -18,10 +25,12 @@ review-calendar-web/.env*
 
 # Deployment
 review-calendar-web/.vercel/
+review-calendar-web/.local/
 
 # OS / editor noise
 .DS_Store
 Thumbs.db
+review-calendar-web/*.pem
 
 # Local VS Code state
 .vscode/*
