@@ -23,6 +23,7 @@ type DashboardTabId = (typeof dashboardTabs)[number]["id"];
 type LoginConnectionMap = Record<SiteLoginConnectorId, boolean>;
 type AppUser = {
   id: string;
+  username: string;
   email: string;
   name: string;
   createdAt: string;
@@ -288,11 +289,17 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authUsername, setAuthUsername] = useState("");
   const [authEmail, setAuthEmail] = useState("");
-  const [authName, setAuthName] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
+  const [authEmailCode, setAuthEmailCode] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [usernameCheckMessage, setUsernameCheckMessage] = useState("");
+  const [emailCodeMessage, setEmailCodeMessage] = useState("");
   const [isAuthPending, setIsAuthPending] = useState(false);
+  const [isUsernameCheckPending, setIsUsernameCheckPending] = useState(false);
+  const [isEmailCodePending, setIsEmailCodePending] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [siteConnections, setSiteConnections] = useState<SiteConnection[]>([]);
@@ -694,9 +701,11 @@ export default function Home() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            username: authUsername,
             email: authEmail,
-            name: authName,
             password: authPassword,
+            passwordConfirm: authPasswordConfirm,
+            emailCode: authEmailCode,
           }),
         },
       );
@@ -712,10 +721,14 @@ export default function Home() {
       setIsBootstrapLoading(true);
       setIsSessionLoading(true);
       setCurrentUser(result.user);
+      setAuthUsername("");
       setAuthEmail("");
-      setAuthName("");
       setAuthPassword("");
+      setAuthPasswordConfirm("");
+      setAuthEmailCode("");
       setAuthMessage("");
+      setUsernameCheckMessage("");
+      setEmailCodeMessage("");
     } catch (error) {
       setAuthMessage(
         error instanceof Error
@@ -724,6 +737,76 @@ export default function Home() {
       );
     } finally {
       setIsAuthPending(false);
+    }
+  }
+
+  async function handleCheckUsername() {
+    setUsernameCheckMessage("");
+    setIsUsernameCheckPending(true);
+
+    try {
+      const response = await fetch(
+        `/api/auth/check-username?username=${encodeURIComponent(authUsername)}`,
+      );
+      const result = (await response.json()) as {
+        available?: boolean;
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "아이디 확인 중 문제가 생겼어요.");
+      }
+
+      setUsernameCheckMessage(
+        result.available
+          ? "사용할 수 있는 아이디예요."
+          : "이미 사용 중인 아이디예요.",
+      );
+    } catch (error) {
+      setUsernameCheckMessage(
+        error instanceof Error
+          ? error.message
+          : "아이디 확인 중 문제가 생겼어요.",
+      );
+    } finally {
+      setIsUsernameCheckPending(false);
+    }
+  }
+
+  async function handleSendEmailCode() {
+    setEmailCodeMessage("");
+    setIsEmailCodePending(true);
+
+    try {
+      const response = await fetch("/api/auth/send-email-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: authEmail }),
+      });
+      const result = (await response.json()) as {
+        message?: string;
+        devCode?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "인증번호 발송 중 문제가 생겼어요.");
+      }
+
+      setEmailCodeMessage(
+        result.devCode
+          ? `${result.message} 인증번호: ${result.devCode}`
+          : (result.message ?? "인증번호를 이메일로 보냈어요."),
+      );
+    } catch (error) {
+      setEmailCodeMessage(
+        error instanceof Error
+          ? error.message
+          : "인증번호 발송 중 문제가 생겼어요.",
+      );
+    } finally {
+      setIsEmailCodePending(false);
     }
   }
 
@@ -1271,18 +1354,30 @@ export default function Home() {
     return (
       <AuthScreen
         mode={authMode}
+        username={authUsername}
         email={authEmail}
-        name={authName}
         password={authPassword}
+        passwordConfirm={authPasswordConfirm}
+        emailCode={authEmailCode}
         message={authMessage}
+        usernameCheckMessage={usernameCheckMessage}
+        emailCodeMessage={emailCodeMessage}
         isPending={isAuthPending}
+        isUsernameCheckPending={isUsernameCheckPending}
+        isEmailCodePending={isEmailCodePending}
         onModeChange={(mode) => {
           setAuthMode(mode);
           setAuthMessage("");
+          setUsernameCheckMessage("");
+          setEmailCodeMessage("");
         }}
+        onUsernameChange={setAuthUsername}
         onEmailChange={setAuthEmail}
-        onNameChange={setAuthName}
         onPasswordChange={setAuthPassword}
+        onPasswordConfirmChange={setAuthPasswordConfirm}
+        onEmailCodeChange={setAuthEmailCode}
+        onCheckUsername={handleCheckUsername}
+        onSendEmailCode={handleSendEmailCode}
         onSubmit={handleAuthSubmit}
       />
     );
@@ -1353,7 +1448,7 @@ export default function Home() {
                     </h1>
                     <div className="flex max-w-full flex-wrap items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(255,190,219,0.28)]">
                       <span className="max-w-[220px] truncate px-2 text-sm font-black text-[#9a4878]">
-                        {currentUser.email}
+                        {currentUser.username}
                       </span>
                       <button
                         onClick={handleLogout}
@@ -2056,27 +2151,47 @@ function AuthLoadingScreen() {
 
 function AuthScreen({
   mode,
+  username,
   email,
-  name,
   password,
+  passwordConfirm,
+  emailCode,
   message,
+  usernameCheckMessage,
+  emailCodeMessage,
   isPending,
+  isUsernameCheckPending,
+  isEmailCodePending,
   onModeChange,
+  onUsernameChange,
   onEmailChange,
-  onNameChange,
   onPasswordChange,
+  onPasswordConfirmChange,
+  onEmailCodeChange,
+  onCheckUsername,
+  onSendEmailCode,
   onSubmit,
 }: {
   mode: AuthMode;
+  username: string;
   email: string;
-  name: string;
   password: string;
+  passwordConfirm: string;
+  emailCode: string;
   message: string;
+  usernameCheckMessage: string;
+  emailCodeMessage: string;
   isPending: boolean;
+  isUsernameCheckPending: boolean;
+  isEmailCodePending: boolean;
   onModeChange: (mode: AuthMode) => void;
+  onUsernameChange: (value: string) => void;
   onEmailChange: (value: string) => void;
-  onNameChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  onPasswordConfirmChange: (value: string) => void;
+  onEmailCodeChange: (value: string) => void;
+  onCheckUsername: () => void;
+  onSendEmailCode: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const isRegister = mode === "register";
@@ -2123,28 +2238,32 @@ function AuthScreen({
             </div>
 
             <form onSubmit={onSubmit} className="mt-7 grid gap-4">
-              {isRegister ? (
-                <label className="grid gap-2 text-sm font-black text-[#9a4878]">
-                  이름
-                  <input
-                    value={name}
-                    onChange={(event) => onNameChange(event.target.value)}
-                    className="rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
-                    placeholder="홍길동"
-                    autoComplete="name"
-                  />
-                </label>
-              ) : null}
               <label className="grid gap-2 text-sm font-black text-[#9a4878]">
-                이메일
-                <input
-                  value={email}
-                  onChange={(event) => onEmailChange(event.target.value)}
-                  className="rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  inputMode="email"
-                />
+                아이디
+                <div className="flex gap-2">
+                  <input
+                    value={username}
+                    onChange={(event) => onUsernameChange(event.target.value)}
+                    className="min-w-0 flex-1 rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
+                    placeholder="review_lover"
+                    autoComplete="username"
+                  />
+                  {isRegister ? (
+                    <button
+                      type="button"
+                      onClick={onCheckUsername}
+                      disabled={isUsernameCheckPending}
+                      className="inline-flex min-w-[96px] items-center justify-center whitespace-nowrap rounded-full bg-[#fff0f7] px-4 py-2 text-xs font-black text-[#c45991] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isUsernameCheckPending ? "확인 중" : "중복 확인"}
+                    </button>
+                  ) : null}
+                </div>
+                {isRegister && usernameCheckMessage ? (
+                  <span className="text-xs font-bold text-[#b45b88]">
+                    {usernameCheckMessage}
+                  </span>
+                ) : null}
               </label>
               <label className="grid gap-2 text-sm font-black text-[#9a4878]">
                 비밀번호
@@ -2157,6 +2276,58 @@ function AuthScreen({
                   autoComplete={isRegister ? "new-password" : "current-password"}
                 />
               </label>
+              {isRegister ? (
+                <>
+                  <label className="grid gap-2 text-sm font-black text-[#9a4878]">
+                    비밀번호 확인
+                    <input
+                      value={passwordConfirm}
+                      onChange={(event) => onPasswordConfirmChange(event.target.value)}
+                      className="rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
+                      placeholder="비밀번호 다시 입력"
+                      type="password"
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-black text-[#9a4878]">
+                    이메일
+                    <div className="flex gap-2">
+                      <input
+                        value={email}
+                        onChange={(event) => onEmailChange(event.target.value)}
+                        className="min-w-0 flex-1 rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        inputMode="email"
+                      />
+                      <button
+                        type="button"
+                        onClick={onSendEmailCode}
+                        disabled={isEmailCodePending}
+                        className="inline-flex min-w-[104px] items-center justify-center whitespace-nowrap rounded-full bg-[#fff0f7] px-4 py-2 text-xs font-black text-[#c45991] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isEmailCodePending ? "발송 중" : "인증번호 발송"}
+                      </button>
+                    </div>
+                    {emailCodeMessage ? (
+                      <span className="text-xs font-bold text-[#b45b88]">
+                        {emailCodeMessage}
+                      </span>
+                    ) : null}
+                  </label>
+                  <label className="grid gap-2 text-sm font-black text-[#9a4878]">
+                    인증번호
+                    <input
+                      value={emailCode}
+                      onChange={(event) => onEmailCodeChange(event.target.value)}
+                      className="rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
+                      placeholder="6자리 인증번호"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                    />
+                  </label>
+                </>
+              ) : null}
               {message ? (
                 <p className="rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
                   {message}

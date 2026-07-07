@@ -5,6 +5,7 @@ import type { SiteConnection } from "@/types/site-connection";
 
 export type AppUser = {
   id: string;
+  username: string;
   email: string;
   name: string;
   createdAt: string;
@@ -34,9 +35,20 @@ export type AutomationJob = {
 
 type UserRow = {
   id: string;
+  username: string;
   email: string;
   name: string;
   passwordHash: string;
+  createdAt: string;
+};
+
+type EmailVerificationCodeRow = {
+  id: string;
+  email: string;
+  codeHash: string;
+  expiresAt: string;
+  consumedAt: string | null;
+  attempts: number;
   createdAt: string;
 };
 
@@ -132,11 +144,46 @@ async function ensureSchema() {
       await sql`
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
+          username TEXT UNIQUE,
           email TEXT NOT NULL UNIQUE,
           name TEXT NOT NULL,
           password_hash TEXT NOT NULL,
           created_at TEXT NOT NULL
         )
+      `;
+
+      await sql`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS username TEXT
+      `;
+
+      await sql`
+        UPDATE users
+        SET username = 'user_' || substr(replace(id, '-', ''), 1, 10)
+        WHERE username IS NULL
+      `;
+
+      await sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx
+        ON users(username)
+        WHERE username IS NOT NULL
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS email_verification_codes (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL,
+          code_hash TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          consumed_at TEXT,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      `;
+
+      await sql`
+        CREATE INDEX IF NOT EXISTS email_verification_codes_email_idx
+        ON email_verification_codes(email)
       `;
 
       await sql`
@@ -332,6 +379,7 @@ function mapCampaign(row: CampaignRow): Campaign {
 function mapUser(row: UserRow): AppUser {
   return {
     id: row.id,
+    username: row.username,
     email: row.email,
     name: row.name,
     createdAt: row.createdAt,
@@ -341,6 +389,7 @@ function mapUser(row: UserRow): AppUser {
 const userSelect = `
   SELECT
     id,
+    username,
     email,
     name,
     password_hash AS "passwordHash",
@@ -354,6 +403,18 @@ export async function findUserByEmail(email: string) {
   const rows = await sql<UserRow[]>`
     ${sql.unsafe(userSelect)}
     WHERE email = ${email.toLowerCase()}
+    LIMIT 1
+  `;
+
+  return rows[0];
+}
+
+export async function findUserByUsername(username: string) {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql<UserRow[]>`
+    ${sql.unsafe(userSelect)}
+    WHERE username = ${username.toLowerCase()}
     LIMIT 1
   `;
 
@@ -374,6 +435,7 @@ export async function findUserById(id: string) {
 
 export async function insertUser(input: {
   id: string;
+  username: string;
   email: string;
   name: string;
   passwordHash: string;
@@ -383,12 +445,13 @@ export async function insertUser(input: {
   const createdAt = new Date().toISOString();
 
   await sql`
-    INSERT INTO users (id, email, name, password_hash, created_at)
-    VALUES (${input.id}, ${input.email.toLowerCase()}, ${input.name}, ${input.passwordHash}, ${createdAt})
+    INSERT INTO users (id, username, email, name, password_hash, created_at)
+    VALUES (${input.id}, ${input.username.toLowerCase()}, ${input.email.toLowerCase()}, ${input.name}, ${input.passwordHash}, ${createdAt})
   `;
 
   return {
     id: input.id,
+    username: input.username.toLowerCase(),
     email: input.email.toLowerCase(),
     name: input.name,
     createdAt,
@@ -416,6 +479,7 @@ export async function findUserBySessionTokenHash(tokenHash: string) {
   const rows = await sql<UserRow[]>`
     SELECT
       users.id,
+      users.username,
       users.email,
       users.name,
       users.password_hash AS "passwordHash",
@@ -435,6 +499,67 @@ export async function deleteUserSessionByTokenHash(tokenHash: string) {
   const sql = getSql();
 
   await sql`DELETE FROM user_sessions WHERE token_hash = ${tokenHash}`;
+}
+
+export async function insertEmailVerificationCode(input: {
+  id: string;
+  email: string;
+  codeHash: string;
+  expiresAt: string;
+}) {
+  await ensureSchema();
+  const sql = getSql();
+
+  await sql`
+    INSERT INTO email_verification_codes (
+      id, email, code_hash, expires_at, created_at
+    ) VALUES (
+      ${input.id}, ${input.email.toLowerCase()}, ${input.codeHash}, ${input.expiresAt}, ${new Date().toISOString()}
+    )
+  `;
+}
+
+export async function findLatestEmailVerificationCode(email: string) {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql<EmailVerificationCodeRow[]>`
+    SELECT
+      id,
+      email,
+      code_hash AS "codeHash",
+      expires_at AS "expiresAt",
+      consumed_at AS "consumedAt",
+      attempts,
+      created_at AS "createdAt"
+    FROM email_verification_codes
+    WHERE email = ${email.toLowerCase()}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+
+  return rows[0];
+}
+
+export async function incrementEmailVerificationAttempts(id: string) {
+  await ensureSchema();
+  const sql = getSql();
+
+  await sql`
+    UPDATE email_verification_codes
+    SET attempts = attempts + 1
+    WHERE id = ${id}
+  `;
+}
+
+export async function consumeEmailVerificationCode(id: string) {
+  await ensureSchema();
+  const sql = getSql();
+
+  await sql`
+    UPDATE email_verification_codes
+    SET consumed_at = ${new Date().toISOString()}
+    WHERE id = ${id}
+  `;
 }
 
 const campaignSelect = `

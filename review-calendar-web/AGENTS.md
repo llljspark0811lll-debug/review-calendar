@@ -42,6 +42,9 @@
 ### 0. 앱 로그인
 
 - 사용자는 앱 계정으로 로그인한 뒤 서비스를 사용한다.
+- 로그인은 이메일이 아니라 `아이디 + 비밀번호`로 한다.
+- 회원가입은 `아이디 중복 확인`, `비밀번호`, `비밀번호 확인`, `이메일 인증번호 확인`을 거쳐 진행한다.
+- 이메일은 로그인 식별자가 아니라 인증번호 수신 및 계정 확인 용도로 사용한다.
 - 비밀번호는 평문으로 저장하지 않고 서버에서 해시하여 저장한다.
 - 로그인 상태는 HttpOnly 세션 쿠키와 `user_sessions` 테이블 기준으로 관리한다.
 - 로그인하지 않은 사용자는 체험단, 사이트 연동, 공휴일, 외부 사이트 로그인 API를 사용할 수 없다.
@@ -224,6 +227,8 @@
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
+- `GET /api/auth/check-username`
+- `POST /api/auth/send-email-code`
 - `GET /api/automation-jobs/[id]`
 - `POST /api/campaigns`
 - `PATCH /api/campaigns/[id]/schedule`
