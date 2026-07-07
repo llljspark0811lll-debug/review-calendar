@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { type FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import {
   findSiteLoginConnectorByDomain,
   siteLoginConnectors,
@@ -21,6 +21,21 @@ const dashboardTabs = [
 
 type DashboardTabId = (typeof dashboardTabs)[number]["id"];
 type LoginConnectionMap = Record<SiteLoginConnectorId, boolean>;
+type AppUser = {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+};
+type AuthMode = "login" | "register";
+type AutomationJob = {
+  id: string;
+  status: "pending" | "running" | "succeeded" | "failed";
+  result: {
+    campaignId?: string;
+  } | null;
+  errorMessage: string | null;
+};
 
 type CheckpointTone = "pink" | "yellow" | "lavender";
 
@@ -270,6 +285,14 @@ function createLoginConnectionMap(
 export default function Home() {
   const today = new Date();
   const currentYear = today.getFullYear();
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [isAuthPending, setIsAuthPending] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [siteConnections, setSiteConnections] = useState<SiteConnection[]>([]);
@@ -465,7 +488,90 @@ export default function Home() {
     return Boolean(result.connected);
   }
 
+  async function refreshBootstrap() {
+    const response = await fetch("/api/bootstrap");
+    const result = (await response.json()) as {
+      campaigns?: Campaign[];
+      holidays?: Holiday[];
+      holidaySyncEnabled?: boolean;
+      siteConnections?: SiteConnection[];
+      message?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(result.message ?? "데이터를 다시 불러오지 못했어요.");
+    }
+
+    const nextCampaigns = result.campaigns ?? [];
+
+    setCampaigns(nextCampaigns);
+    setHolidays(result.holidays ?? []);
+    setSiteConnections(result.siteConnections ?? []);
+    setHolidaySyncEnabled(Boolean(result.holidaySyncEnabled));
+
+    return nextCampaigns;
+  }
+
+  async function waitForAutomationJob(jobId: string) {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const response = await fetch(`/api/automation-jobs/${jobId}`);
+      const result = (await response.json()) as {
+        job?: AutomationJob;
+        message?: string;
+      };
+
+      if (!response.ok || !result.job) {
+        throw new Error(result.message ?? "자동 등록 작업 상태를 확인하지 못했어요.");
+      }
+
+      if (result.job.status === "succeeded") {
+        return result.job;
+      }
+
+      if (result.job.status === "failed") {
+        throw new Error(result.job.errorMessage ?? "자동 등록 작업에 실패했어요.");
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    throw new Error("자동 등록 작업이 아직 처리 중이에요. 잠시 뒤 목록을 새로고침해 주세요.");
+  }
+
   useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/auth/me")
+      .then(async (response) => {
+        const result = (await response.json()) as { user?: AppUser | null };
+
+        if (cancelled) {
+          return;
+        }
+
+        setCurrentUser(response.ok ? (result.user ?? null) : null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentUser(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsAuthLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
     let cancelled = false;
 
     fetch("/api/bootstrap")
@@ -482,11 +588,10 @@ export default function Home() {
         }
 
         const nextCampaigns = result.campaigns ?? [];
-        const nextSiteConnections = result.siteConnections ?? [];
 
         setCampaigns(nextCampaigns);
         setHolidays(result.holidays ?? []);
-        setSiteConnections(nextSiteConnections);
+        setSiteConnections(result.siteConnections ?? []);
         setHolidaySyncEnabled(Boolean(result.holidaySyncEnabled));
         setSelectedId(nextCampaigns[0]?.id ?? null);
       })
@@ -499,9 +604,13 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
     let cancelled = false;
 
     Promise.all(
@@ -534,9 +643,13 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
     let cancelled = false;
 
     fetch(
@@ -565,7 +678,64 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [visibleMonthRange.startDate]);
+  }, [currentUser, visibleMonthRange.startDate]);
+
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMessage("");
+    setIsAuthPending(true);
+
+    try {
+      const response = await fetch(
+        authMode === "login" ? "/api/auth/login" : "/api/auth/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: authEmail,
+            name: authName,
+            password: authPassword,
+          }),
+        },
+      );
+      const result = (await response.json()) as {
+        user?: AppUser;
+        message?: string;
+      };
+
+      if (!response.ok || !result.user) {
+        throw new Error(result.message ?? "로그인 처리 중 문제가 생겼어요.");
+      }
+
+      setIsBootstrapLoading(true);
+      setIsSessionLoading(true);
+      setCurrentUser(result.user);
+      setAuthEmail("");
+      setAuthName("");
+      setAuthPassword("");
+      setAuthMessage("");
+    } catch (error) {
+      setAuthMessage(
+        error instanceof Error
+          ? error.message
+          : "로그인 처리 중 문제가 생겼어요.",
+      );
+    } finally {
+      setIsAuthPending(false);
+    }
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setCurrentUser(null);
+    setCampaigns([]);
+    setHolidays([]);
+    setSiteConnections([]);
+    setLoginConnections(createLoginConnectionMap(false));
+    setSelectedId(null);
+  }
 
   function openRegisterModal() {
     setLinkValue("");
@@ -710,16 +880,23 @@ export default function Home() {
           body: JSON.stringify({ url: linkValue.trim() }),
         });
 
-        const result = (await response.json()) as Campaign | { message: string };
+        const result = (await response.json()) as {
+          job?: AutomationJob;
+          message?: string;
+        };
 
-        if (!response.ok) {
-          throw new Error("message" in result ? result.message : "링크 파싱에 실패했어요.");
+        if (!response.ok || !result.job) {
+          throw new Error(result.message ?? "링크 등록 작업을 만들지 못했어요.");
         }
 
-        const nextCampaign = result as Campaign;
+        const completedJob = await waitForAutomationJob(result.job.id);
+        const nextCampaigns = await refreshBootstrap();
+        const nextCampaign =
+          nextCampaigns.find(
+            (campaign) => campaign.id === completedJob.result?.campaignId,
+          ) ?? nextCampaigns[0];
 
-        setCampaigns((current) => [nextCampaign, ...current]);
-        setSelectedId(nextCampaign.id);
+        setSelectedId(nextCampaign?.id ?? null);
         closeRegisterModal();
       } catch (error) {
         setRegisterErrorMessage(
@@ -1086,6 +1263,31 @@ export default function Home() {
     }
   }
 
+  if (isAuthLoading) {
+    return <AuthLoadingScreen />;
+  }
+
+  if (!currentUser) {
+    return (
+      <AuthScreen
+        mode={authMode}
+        email={authEmail}
+        name={authName}
+        password={authPassword}
+        message={authMessage}
+        isPending={isAuthPending}
+        onModeChange={(mode) => {
+          setAuthMode(mode);
+          setAuthMessage("");
+        }}
+        onEmailChange={setAuthEmail}
+        onNameChange={setAuthName}
+        onPasswordChange={setAuthPassword}
+        onSubmit={handleAuthSubmit}
+      />
+    );
+  }
+
   return (
     <main className="review-calendar-app min-h-screen overflow-hidden bg-[linear-gradient(180deg,#ffeaf5_0%,#ffdceb_35%,#ffeaf7_100%)] text-[#7f355b]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.8)_0,rgba(255,255,255,0)_16%),radial-gradient(circle_at_82%_10%,rgba(255,246,190,0.65)_0,rgba(255,246,190,0)_12%),radial-gradient(circle_at_80%_70%,rgba(229,214,255,0.75)_0,rgba(229,214,255,0)_16%),linear-gradient(135deg,rgba(255,255,255,0.14)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.14)_50%,rgba(255,255,255,0.14)_75%,transparent_75%,transparent)] bg-[length:auto,auto,auto,28px_28px] opacity-80" />
@@ -1145,9 +1347,22 @@ export default function Home() {
                 </div>
 
                 <div className="flex min-h-[190px] items-start xl:justify-end">
-                  <h1 className="font-display text-5xl leading-none text-[#8f315f] sm:text-6xl lg:text-[88px] xl:pt-3">
-                    리뷰캘린더
-                  </h1>
+                  <div className="flex flex-col items-start gap-4 xl:items-end">
+                    <h1 className="font-display text-5xl leading-none text-[#8f315f] sm:text-6xl lg:text-[88px] xl:pt-3">
+                      리뷰캘린더
+                    </h1>
+                    <div className="flex max-w-full flex-wrap items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(255,190,219,0.28)]">
+                      <span className="max-w-[220px] truncate px-2 text-sm font-black text-[#9a4878]">
+                        {currentUser.email}
+                      </span>
+                      <button
+                        onClick={handleLogout}
+                        className="inline-flex min-w-[78px] items-center justify-center whitespace-nowrap rounded-full bg-[#fff0f7] px-3 py-2 text-xs font-black text-[#c45991]"
+                      >
+                        로그아웃
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <p className="mt-6 text-2xl font-black leading-snug text-[#e36aa6] sm:text-3xl">
@@ -1824,6 +2039,140 @@ export default function Home() {
           onConfirm={handleConfirmRemoveSite}
         />
       ) : null}
+    </main>
+  );
+}
+
+function AuthLoadingScreen() {
+  return (
+    <main className="review-calendar-app flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#ffeaf5_0%,#ffdceb_55%,#ffeaf7_100%)] px-4 text-[#7f355b]">
+      <div className="rounded-[32px] border-2 border-white/70 bg-white/80 px-8 py-6 text-center shadow-[0_28px_60px_rgba(233,116,171,0.2)]">
+        <p className="font-display text-3xl text-[#8f315f]">리뷰캘린더</p>
+        <p className="mt-3 text-sm font-bold text-[#b45b88]">계정 상태를 확인하고 있어요.</p>
+      </div>
+    </main>
+  );
+}
+
+function AuthScreen({
+  mode,
+  email,
+  name,
+  password,
+  message,
+  isPending,
+  onModeChange,
+  onEmailChange,
+  onNameChange,
+  onPasswordChange,
+  onSubmit,
+}: {
+  mode: AuthMode;
+  email: string;
+  name: string;
+  password: string;
+  message: string;
+  isPending: boolean;
+  onModeChange: (mode: AuthMode) => void;
+  onEmailChange: (value: string) => void;
+  onNameChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const isRegister = mode === "register";
+
+  return (
+    <main className="review-calendar-app min-h-screen overflow-hidden bg-[linear-gradient(180deg,#ffeaf5_0%,#ffdceb_45%,#ffeaf7_100%)] px-4 py-8 text-[#7f355b]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.9)_0,rgba(255,255,255,0)_16%),radial-gradient(circle_at_80%_72%,rgba(229,214,255,0.65)_0,rgba(229,214,255,0)_16%)]" />
+      <div className="relative mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-5xl items-center justify-center">
+        <section className="grid w-full overflow-hidden rounded-[40px] border-2 border-white/75 bg-white/78 shadow-[0_34px_90px_rgba(233,116,171,0.24)] backdrop-blur-xl lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] p-8 text-white sm:p-10">
+            <p className="font-display text-5xl leading-none sm:text-6xl">
+              리뷰캘린더
+            </p>
+            <p className="mt-6 max-w-sm text-lg font-bold leading-8 text-white/92">
+              선정 체험단과 리뷰 마감일을 계정 안에서 안전하게 관리하세요.
+            </p>
+            <div className="mt-10 grid gap-3 text-sm font-black text-white/90">
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">캘린더 일정 관리</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">사이트 연동 관리</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">리뷰 마감 체크</div>
+            </div>
+          </div>
+
+          <div className="p-6 sm:p-10">
+            <div className="flex rounded-full bg-[#fff1f8] p-1">
+              <button
+                type="button"
+                onClick={() => onModeChange("login")}
+                className={`flex-1 whitespace-nowrap rounded-full px-4 py-3 text-sm font-black ${
+                  !isRegister ? "bg-white text-[#c4518a] shadow-[0_10px_18px_rgba(255,190,219,0.3)]" : "text-[#a55b83]"
+                }`}
+              >
+                로그인
+              </button>
+              <button
+                type="button"
+                onClick={() => onModeChange("register")}
+                className={`flex-1 whitespace-nowrap rounded-full px-4 py-3 text-sm font-black ${
+                  isRegister ? "bg-white text-[#c4518a] shadow-[0_10px_18px_rgba(255,190,219,0.3)]" : "text-[#a55b83]"
+                }`}
+              >
+                회원가입
+              </button>
+            </div>
+
+            <form onSubmit={onSubmit} className="mt-7 grid gap-4">
+              {isRegister ? (
+                <label className="grid gap-2 text-sm font-black text-[#9a4878]">
+                  이름
+                  <input
+                    value={name}
+                    onChange={(event) => onNameChange(event.target.value)}
+                    className="rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
+                    placeholder="홍길동"
+                    autoComplete="name"
+                  />
+                </label>
+              ) : null}
+              <label className="grid gap-2 text-sm font-black text-[#9a4878]">
+                이메일
+                <input
+                  value={email}
+                  onChange={(event) => onEmailChange(event.target.value)}
+                  className="rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  inputMode="email"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-black text-[#9a4878]">
+                비밀번호
+                <input
+                  value={password}
+                  onChange={(event) => onPasswordChange(event.target.value)}
+                  className="rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
+                  placeholder="8자 이상"
+                  type="password"
+                  autoComplete={isRegister ? "new-password" : "current-password"}
+                />
+              </label>
+              {message ? (
+                <p className="rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
+                  {message}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                disabled={isPending}
+                className="mt-2 inline-flex min-h-[48px] items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-black text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPending ? "처리 중..." : isRegister ? "계정 만들기" : "로그인"}
+              </button>
+            </form>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

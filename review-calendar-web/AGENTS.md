@@ -13,9 +13,10 @@
 
 - 프론트엔드: `Next.js App Router`
 - 언어: `TypeScript`
-- 로컬 DB: `SQLite` via `better-sqlite3`
+- DB: `PostgreSQL` via `postgres`
 - 로그인 자동화: `Playwright`
 - 개발 서버: `http://localhost:3005`
+- 자동화 워커: `npm.cmd run worker`
 
 ## 환경변수
 
@@ -24,14 +25,35 @@
   - 위치: `review-calendar-web/.env.local`
   - 형식:
     - `DATA_GO_KR_SERVICE_KEY=발급받은_인증키`
+- `DATABASE_URL`
+  - PostgreSQL 연결 문자열
+  - 로컬 개발과 Vercel/Neon 배포 환경에 각각 설정한다.
+  - 형식:
+    - `DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DATABASE`
 
 ## 저장 구조
 
-- 체험단 / 사이트 연동 DB: `review-calendar-web/.local/review-calendar.db`
-- 리뷰노트 로그인 세션: `review-calendar-web/.local/reviewnote-storage.json`
-- 강남맛집 로그인 세션: `review-calendar-web/.local/gangnam-storage.json`
+- 체험단 / 사이트 연동 DB: `PostgreSQL`
+- 리뷰노트 로그인 세션: PostgreSQL `external_site_sessions`
+- 강남맛집 로그인 세션: PostgreSQL `external_site_sessions`
 
 ## 현재 핵심 기능
+
+### 0. 앱 로그인
+
+- 사용자는 앱 계정으로 로그인한 뒤 서비스를 사용한다.
+- 비밀번호는 평문으로 저장하지 않고 서버에서 해시하여 저장한다.
+- 로그인 상태는 HttpOnly 세션 쿠키와 `user_sessions` 테이블 기준으로 관리한다.
+- 로그인하지 않은 사용자는 체험단, 사이트 연동, 공휴일, 외부 사이트 로그인 API를 사용할 수 없다.
+- 체험단 / 사이트 연동 / 외부 사이트 로그인 세션은 `userId` 기준으로 분리한다.
+
+### 0-1. 자동화 워커
+
+- 체험단 링크 등록 API는 즉시 Playwright 파싱을 실행하지 않고 `automation_jobs`에 작업을 만든다.
+- 로컬/서버 워커는 `npm.cmd run worker`로 실행한다.
+- 워커는 `pending` 작업을 가져와 사이트별 파서를 실행하고, 성공 시 `campaigns`에 저장한다.
+- 작업 상태는 `pending`, `running`, `succeeded`, `failed` 순서로 관리한다.
+- Vercel 배포 시 Next.js 앱과 Playwright 워커는 분리 운영한다.
 
 ### 1. 사이트 연동
 
@@ -198,6 +220,11 @@
 ## 현재 주요 API
 
 - `GET /api/bootstrap`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/automation-jobs/[id]`
 - `POST /api/campaigns`
 - `PATCH /api/campaigns/[id]/schedule`
 - `PATCH /api/campaigns/[id]/status`

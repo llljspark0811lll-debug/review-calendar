@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { parseCampaignLink } from "@/lib/parsers";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
+    }
+
     const body = (await request.json()) as { url?: string };
 
     if (!body.url) {
@@ -14,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const parsed = await parseCampaignLink(body.url);
+    const parsed = await parseCampaignLink(body.url, user.id);
     return NextResponse.json(parsed);
   } catch (error) {
     return NextResponse.json(

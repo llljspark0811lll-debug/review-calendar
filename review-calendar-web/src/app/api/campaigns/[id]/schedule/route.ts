@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import {
   clearCampaignSchedule,
   findCampaignById,
@@ -27,9 +28,15 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
+    }
+
     const { id } = await context.params;
     const body = (await request.json()) as { selectedDate?: string | null };
-    const campaign = findCampaignById(id);
+    const campaign = await findCampaignById(id, user.id);
 
     if (!campaign) {
       return NextResponse.json(
@@ -52,7 +59,7 @@ export async function PATCH(
         );
       }
 
-      clearCampaignSchedule(id);
+      await clearCampaignSchedule(id, user.id);
       return NextResponse.json({
         ok: true,
         selectedDate: null,
@@ -89,7 +96,7 @@ export async function PATCH(
       );
     }
 
-    updateCampaignSchedule(id, body.selectedDate);
+    await updateCampaignSchedule(id, body.selectedDate, user.id);
 
     return NextResponse.json({
       ok: true,

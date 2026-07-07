@@ -1,14 +1,14 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { launchVisibleBrowser } from "@/lib/browser";
+import {
+  deleteExternalSiteSession,
+  findExternalSiteSession,
+  upsertExternalSiteSession,
+} from "@/lib/db";
 
 const GANGNAM_BASE_URL = "https://xn--939au0g4vj8sq.net";
 const GANGNAM_LOGIN_URL = `${GANGNAM_BASE_URL}/bbs/login.php?url=%2Fcp%2F%3Fid%3D2207100`;
-const GANGNAM_STORAGE_DIR = path.join(process.cwd(), ".local");
-const GANGNAM_STORAGE_PATH = path.join(
-  GANGNAM_STORAGE_DIR,
-  "gangnam-storage.json",
-);
+const GANGNAM_CONNECTOR_ID = "gangnam";
 
 type StorageCookie = {
   name: string;
@@ -24,17 +24,9 @@ type StorageState = {
   origins: Array<unknown>;
 };
 
-async function ensureStorageDir() {
-  await fs.mkdir(GANGNAM_STORAGE_DIR, { recursive: true });
-}
-
-async function readStorageState(): Promise<StorageState | null> {
-  try {
-    const raw = await fs.readFile(GANGNAM_STORAGE_PATH, "utf8");
-    return JSON.parse(raw) as StorageState;
-  } catch {
-    return null;
-  }
+async function readStorageState(userId: string): Promise<StorageState | null> {
+  const state = await findExternalSiteSession(userId, GANGNAM_CONNECTOR_ID);
+  return state ? (state as StorageState) : null;
 }
 
 function isCookieUsable(cookie: StorageCookie, hostname: string) {
@@ -48,8 +40,8 @@ function isCookieUsable(cookie: StorageCookie, hostname: string) {
   return notExpired && domainMatch;
 }
 
-export async function hasGangnamSession() {
-  const state = await readStorageState();
+export async function hasGangnamSession(userId: string) {
+  const state = await readStorageState(userId);
 
   if (!state) {
     return false;
@@ -60,8 +52,8 @@ export async function hasGangnamSession() {
   );
 }
 
-export async function getGangnamCookieHeader() {
-  const state = await readStorageState();
+export async function getGangnamCookieHeader(userId: string) {
+  const state = await readStorageState(userId);
 
   if (!state) {
     return null;
@@ -78,17 +70,11 @@ export async function getGangnamCookieHeader() {
   return usableCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }
 
-export async function clearGangnamSession() {
-  try {
-    await fs.unlink(GANGNAM_STORAGE_PATH);
-  } catch {
-    // 저장된 세션 파일이 없으면 무시한다.
-  }
+export async function clearGangnamSession(userId: string) {
+  await deleteExternalSiteSession(userId, GANGNAM_CONNECTOR_ID);
 }
 
-export async function launchGangnamLogin() {
-  await ensureStorageDir();
-
+export async function launchGangnamLogin(userId: string) {
   const browser = await launchVisibleBrowser();
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
@@ -130,7 +116,7 @@ export async function launchGangnamLogin() {
           break;
         }
       } catch {
-        // 페이지 이동 중에는 평가가 실패할 수 있다.
+        // Login pages can navigate while the in-page check is running.
       }
 
       await page.waitForTimeout(1000);
@@ -142,7 +128,12 @@ export async function launchGangnamLogin() {
       );
     }
 
-    await context.storageState({ path: GANGNAM_STORAGE_PATH });
+    await upsertExternalSiteSession({
+      id: randomUUID(),
+      userId,
+      connectorId: GANGNAM_CONNECTOR_ID,
+      storageState: await context.storageState(),
+    });
   } finally {
     if (browser.isConnected()) {
       await browser.close();

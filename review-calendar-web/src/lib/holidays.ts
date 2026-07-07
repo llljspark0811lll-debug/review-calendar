@@ -162,13 +162,13 @@ async function ensureHolidayCoverage(
   const skippedYears: number[] = [];
 
   for (const year of years) {
-    if (!forceRefresh && countHolidaysByYear(year) > 0) {
+    if (!forceRefresh && (await countHolidaysByYear(year)) > 0) {
       skippedYears.push(year);
       continue;
     }
 
     const holidays = await fetchOfficialHolidaysByYear(year, serviceKey);
-    upsertHolidays(holidays);
+    await upsertHolidays(holidays);
     syncedYears.push(year);
   }
 

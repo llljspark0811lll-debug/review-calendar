@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { listHolidaysInRange } from "@/lib/db";
 import { refreshHolidayCoverageForYears } from "@/lib/holidays";
 
@@ -9,6 +10,12 @@ function isIsoDate(value: string) {
 }
 
 export async function GET(request: Request) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
@@ -48,7 +55,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    holidays: listHolidaysInRange(startDate, endDate),
+    holidays: await listHolidaysInRange(startDate, endDate),
     holidaySyncEnabled: Boolean(process.env.DATA_GO_KR_SERVICE_KEY),
   });
 }

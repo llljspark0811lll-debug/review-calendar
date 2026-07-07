@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { findSiteConnectionByDomain, insertCampaign } from "@/lib/db";
-import { parseCampaignLink } from "@/lib/parsers";
-import type { Campaign } from "@/types/campaign";
+import { getCurrentUser } from "@/lib/auth";
+import { findSiteConnectionByDomain, insertAutomationJob } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -17,6 +16,12 @@ function normalizeDomain(rawUrl: string) {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
+    }
+
     const body = (await request.json()) as { url?: string };
 
     if (!body.url) {
@@ -27,7 +32,7 @@ export async function POST(request: Request) {
     }
 
     const domain = normalizeDomain(body.url);
-    const siteConnection = findSiteConnectionByDomain(domain);
+    const siteConnection = await findSiteConnectionByDomain(domain, user.id);
 
     if (!siteConnection) {
       return NextResponse.json(
@@ -49,15 +54,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const parsed = await parseCampaignLink(body.url);
-    const campaign: Campaign = {
-      ...parsed,
+    const job = await insertAutomationJob({
       id: randomUUID(),
-    };
+      userId: user.id,
+      type: "parse_campaign",
+      input: {
+        url: body.url,
+      },
+    });
 
-    insertCampaign(campaign);
-
-    return NextResponse.json(campaign);
+    return NextResponse.json({ job }, { status: 202 });
   } catch (error) {
     return NextResponse.json(
       {

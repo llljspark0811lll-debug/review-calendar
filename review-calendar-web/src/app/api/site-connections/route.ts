@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import {
   deleteSiteConnection,
   findSiteConnectionByDomain,
@@ -18,8 +19,21 @@ import type { ParserSupport, SiteConnection } from "@/types/site-connection";
 
 export const runtime = "nodejs";
 
+async function requireUser() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return {
+      response: NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 }),
+      user: null,
+    };
+  }
+
+  return { response: null, user };
+}
+
 const clearLoginSessionByConnectorId: Partial<
-  Record<SiteLoginConnectorId, () => Promise<void>>
+  Record<SiteLoginConnectorId, (userId: string) => Promise<void>>
 > = {
   reviewnote: clearReviewNoteSession,
   gangnam: clearGangnamSession,
@@ -57,13 +71,25 @@ function detectParserSupport(domain: string): ParserSupport {
 }
 
 export async function GET() {
+  const { response, user } = await requireUser();
+
+  if (response) {
+    return response;
+  }
+
   return NextResponse.json({
-    siteConnections: listSiteConnections(),
+    siteConnections: await listSiteConnections(user.id),
   });
 }
 
 export async function POST(request: Request) {
   try {
+    const { response, user } = await requireUser();
+
+    if (response) {
+      return response;
+    }
+
     const body = (await request.json()) as {
       siteName?: string;
       baseUrl?: string;
@@ -84,7 +110,7 @@ export async function POST(request: Request) {
       ? parseDomain(body.loginUrl).normalized
       : normalizedBaseUrl;
 
-    if (findSiteConnectionByDomain(domain)) {
+    if (await findSiteConnectionByDomain(domain, user.id)) {
       return NextResponse.json(
         { message: "이미 등록된 사이트예요." },
         { status: 400 },
@@ -101,7 +127,7 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
     };
 
-    insertSiteConnection(siteConnection);
+    await insertSiteConnection(siteConnection, user.id);
 
     return NextResponse.json(siteConnection);
   } catch (error) {
@@ -118,6 +144,12 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const { response, user } = await requireUser();
+
+  if (response) {
+    return response;
+  }
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
@@ -128,16 +160,16 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const site = findSiteConnectionById(id);
+  const site = await findSiteConnectionById(id, user.id);
   const connector = site ? findSiteLoginConnectorByDomain(site.domain) : undefined;
   const clearLoginSession = connector
     ? clearLoginSessionByConnectorId[connector.id]
     : undefined;
 
   if (clearLoginSession) {
-    await clearLoginSession();
+    await clearLoginSession(user.id);
   }
 
-  deleteSiteConnection(id);
+  await deleteSiteConnection(id, user.id);
   return NextResponse.json({ ok: true });
 }

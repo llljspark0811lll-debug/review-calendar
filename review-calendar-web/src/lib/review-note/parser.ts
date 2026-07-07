@@ -84,8 +84,9 @@ function buildMemo(data: ReviewNoteCampaignResponse) {
 export async function parseReviewNoteCampaign(
   campaignId: string,
   href: string,
+  userId: string,
 ): Promise<ParsedCampaign> {
-  const cookieHeader = await getReviewNoteCookieHeader();
+  const cookieHeader = await getReviewNoteCookieHeader(userId);
 
   if (!cookieHeader) {
     throw new Error("리뷰노트 로그인이 먼저 필요해요.");

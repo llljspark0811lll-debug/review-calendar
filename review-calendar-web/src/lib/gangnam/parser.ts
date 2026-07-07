@@ -86,8 +86,9 @@ function extractAddress(visitInfo: string) {
 export async function parseGangnamCampaign(
   campaignId: string,
   href: string,
+  userId: string,
 ): Promise<ParsedCampaign> {
-  const cookieHeader = await getGangnamCookieHeader();
+  const cookieHeader = await getGangnamCookieHeader(userId);
 
   if (!cookieHeader) {
     throw new Error("강남맛집 로그인이 먼저 필요해요.");

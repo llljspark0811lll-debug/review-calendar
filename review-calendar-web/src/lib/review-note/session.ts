@@ -1,13 +1,13 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { launchVisibleBrowser } from "@/lib/browser";
+import {
+  deleteExternalSiteSession,
+  findExternalSiteSession,
+  upsertExternalSiteSession,
+} from "@/lib/db";
 
 const REVIEW_NOTE_SAMPLE_URL = "https://www.reviewnote.co.kr/campaigns/1244064";
-const REVIEW_NOTE_STORAGE_DIR = path.join(process.cwd(), ".local");
-const REVIEW_NOTE_STORAGE_PATH = path.join(
-  REVIEW_NOTE_STORAGE_DIR,
-  "reviewnote-storage.json",
-);
+const REVIEW_NOTE_CONNECTOR_ID = "reviewnote";
 
 type StorageCookie = {
   name: string;
@@ -23,17 +23,9 @@ type StorageState = {
   origins: Array<unknown>;
 };
 
-async function ensureStorageDir() {
-  await fs.mkdir(REVIEW_NOTE_STORAGE_DIR, { recursive: true });
-}
-
-async function readStorageState(): Promise<StorageState | null> {
-  try {
-    const raw = await fs.readFile(REVIEW_NOTE_STORAGE_PATH, "utf8");
-    return JSON.parse(raw) as StorageState;
-  } catch {
-    return null;
-  }
+async function readStorageState(userId: string): Promise<StorageState | null> {
+  const state = await findExternalSiteSession(userId, REVIEW_NOTE_CONNECTOR_ID);
+  return state ? (state as StorageState) : null;
 }
 
 function isCookieUsable(cookie: StorageCookie, hostname: string) {
@@ -47,8 +39,8 @@ function isCookieUsable(cookie: StorageCookie, hostname: string) {
   return notExpired && domainMatch;
 }
 
-export async function hasReviewNoteSession() {
-  const state = await readStorageState();
+export async function hasReviewNoteSession(userId: string) {
+  const state = await readStorageState(userId);
 
   if (!state) {
     return false;
@@ -59,8 +51,8 @@ export async function hasReviewNoteSession() {
   );
 }
 
-export async function getReviewNoteCookieHeader() {
-  const state = await readStorageState();
+export async function getReviewNoteCookieHeader(userId: string) {
+  const state = await readStorageState(userId);
 
   if (!state) {
     return null;
@@ -77,17 +69,11 @@ export async function getReviewNoteCookieHeader() {
   return usableCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }
 
-export async function clearReviewNoteSession() {
-  try {
-    await fs.unlink(REVIEW_NOTE_STORAGE_PATH);
-  } catch {
-    // 저장된 세션 파일이 없으면 무시한다.
-  }
+export async function clearReviewNoteSession(userId: string) {
+  await deleteExternalSiteSession(userId, REVIEW_NOTE_CONNECTOR_ID);
 }
 
-export async function launchReviewNoteLogin() {
-  await ensureStorageDir();
-
+export async function launchReviewNoteLogin(userId: string) {
   const browser = await launchVisibleBrowser();
   const context = await browser.newContext({
     viewport: null,
@@ -121,7 +107,7 @@ export async function launchReviewNoteLogin() {
           break;
         }
       } catch {
-        // 로그인 전에는 fetch가 실패하거나 401을 반환할 수 있다.
+        // Login pages can navigate while the in-page fetch is running.
       }
 
       await page.waitForTimeout(1000);
@@ -133,7 +119,12 @@ export async function launchReviewNoteLogin() {
       );
     }
 
-    await context.storageState({ path: REVIEW_NOTE_STORAGE_PATH });
+    await upsertExternalSiteSession({
+      id: randomUUID(),
+      userId,
+      connectorId: REVIEW_NOTE_CONNECTOR_ID,
+      storageState: await context.storageState(),
+    });
   } finally {
     if (browser.isConnected()) {
       await browser.close();

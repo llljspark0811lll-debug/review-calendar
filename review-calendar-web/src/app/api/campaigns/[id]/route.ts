@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { deleteCampaign } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -8,8 +9,14 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
+    }
+
     const { id } = await context.params;
-    deleteCampaign(id);
+    await deleteCampaign(id, user.id);
 
     return NextResponse.json({
       ok: true,
@@ -27,4 +34,3 @@ export async function DELETE(
     );
   }
 }
-

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { findCampaignById, updateCampaignStatus } from "@/lib/db";
 import type { CampaignStatus } from "@/types/campaign";
 
@@ -36,6 +37,12 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
+    }
+
     const { id } = await context.params;
     const body = (await request.json()) as { status?: unknown };
 
@@ -49,7 +56,7 @@ export async function PATCH(
       );
     }
 
-    const campaign = findCampaignById(id);
+    const campaign = await findCampaignById(id, user.id);
 
     if (!campaign) {
       return NextResponse.json(
@@ -71,7 +78,7 @@ export async function PATCH(
       );
     }
 
-    updateCampaignStatus(id, nextStatus);
+    await updateCampaignStatus(id, nextStatus, user.id);
 
     return NextResponse.json({
       ok: true,

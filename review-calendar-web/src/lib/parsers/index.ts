@@ -21,7 +21,10 @@ export function hasCampaignParserForDomain(domain: string) {
   }
 }
 
-export async function parseCampaignLink(rawUrl: string): Promise<ParsedCampaign> {
+export async function parseCampaignLink(
+  rawUrl: string,
+  userId: string,
+): Promise<ParsedCampaign> {
   let url: URL;
 
   try {
@@ -36,5 +39,5 @@ export async function parseCampaignLink(rawUrl: string): Promise<ParsedCampaign>
     throw new Error("아직 자동 등록 파서가 준비되지 않은 사이트예요.");
   }
 
-  return parser.parse(url);
+  return parser.parse(url, userId);
 }
