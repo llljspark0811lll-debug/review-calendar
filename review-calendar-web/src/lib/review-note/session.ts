@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { launchVisibleBrowser } from "@/lib/browser";
 import {
   deleteExternalSiteSession,
   findExternalSiteSession,
@@ -74,6 +73,7 @@ export async function clearReviewNoteSession(userId: string) {
 }
 
 export async function launchReviewNoteLogin(userId: string) {
+  const { launchVisibleBrowser } = await import("@/lib/browser");
   const browser = await launchVisibleBrowser();
   const context = await browser.newContext({
     viewport: null,

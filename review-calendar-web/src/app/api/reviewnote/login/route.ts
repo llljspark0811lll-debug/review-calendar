@@ -4,12 +4,19 @@ import { launchReviewNoteLogin } from "@/lib/review-note/session";
 
 export const runtime = "nodejs";
 
+const vercelLoginMessage =
+  "배포 환경에서는 체험단 사이트 로그인 창을 직접 띄울 수 없어요. 자동 로그인 연동은 별도 자동화 서버를 연결한 뒤 사용할 수 있어요.";
+
 export async function POST() {
   try {
     const user = await getCurrentUser();
 
     if (!user) {
       return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
+    }
+
+    if (process.env.VERCEL === "1") {
+      return NextResponse.json({ message: vercelLoginMessage }, { status: 501 });
     }
 
     const result = await launchReviewNoteLogin(user.id);

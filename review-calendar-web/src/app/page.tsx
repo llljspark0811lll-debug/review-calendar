@@ -91,6 +91,23 @@ function formatMonthDay(dateString: string) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
+async function readApiJson<T>(
+  response: Response,
+  fallbackMessage: string,
+): Promise<T> {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      return (await response.json()) as T;
+    } catch {
+      return { message: fallbackMessage } as T;
+    }
+  }
+
+  return { message: fallbackMessage } as T;
+}
+
 function formatDateTime(dateString: string | null) {
   if (!dateString) {
     return "아직 미정";
@@ -486,7 +503,10 @@ export default function Home() {
 
   async function loadLoginConnection(connector: SiteLoginConnector) {
     const response = await fetch(connector.sessionPath);
-    const result = (await response.json()) as { connected?: boolean };
+    const result = await readApiJson<{ connected?: boolean }>(
+      response,
+      "로그인 연동 상태를 확인하지 못했어요.",
+    );
 
     if (!response.ok) {
       throw new Error();
@@ -497,13 +517,13 @@ export default function Home() {
 
   async function refreshBootstrap() {
     const response = await fetch("/api/bootstrap");
-    const result = (await response.json()) as {
+    const result = await readApiJson<{
       campaigns?: Campaign[];
       holidays?: Holiday[];
       holidaySyncEnabled?: boolean;
       siteConnections?: SiteConnection[];
       message?: string;
-    };
+    }>(response, "데이터를 다시 불러오지 못했어요.");
 
     if (!response.ok) {
       throw new Error(result.message ?? "데이터를 다시 불러오지 못했어요.");
@@ -522,10 +542,10 @@ export default function Home() {
   async function waitForAutomationJob(jobId: string) {
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const response = await fetch(`/api/automation-jobs/${jobId}`);
-      const result = (await response.json()) as {
+      const result = await readApiJson<{
         job?: AutomationJob;
         message?: string;
-      };
+      }>(response, "자동 등록 작업 상태를 확인하지 못했어요.");
 
       if (!response.ok || !result.job) {
         throw new Error(result.message ?? "자동 등록 작업 상태를 확인하지 못했어요.");
@@ -550,7 +570,10 @@ export default function Home() {
 
     fetch("/api/auth/me")
       .then(async (response) => {
-        const result = (await response.json()) as { user?: AppUser | null };
+        const result = await readApiJson<{ user?: AppUser | null }>(
+          response,
+          "로그인 상태를 확인하지 못했어요.",
+        );
 
         if (cancelled) {
           return;
@@ -583,12 +606,12 @@ export default function Home() {
 
     fetch("/api/bootstrap")
       .then(async (response) => {
-        const result = (await response.json()) as {
+        const result = await readApiJson<{
           campaigns?: Campaign[];
           holidays?: Holiday[];
           holidaySyncEnabled?: boolean;
           siteConnections?: SiteConnection[];
-        };
+        }>(response, "데이터를 불러오지 못했어요.");
 
         if (!response.ok || cancelled) {
           return;
@@ -663,10 +686,10 @@ export default function Home() {
       `/api/holidays?startDate=${visibleMonthRange.startDate.slice(0, 4)}-01-01&endDate=${visibleMonthRange.startDate.slice(0, 4)}-12-31`,
     )
       .then(async (response) => {
-        const result = (await response.json()) as {
+        const result = await readApiJson<{
           holidays?: Holiday[];
           holidaySyncEnabled?: boolean;
-        };
+        }>(response, "공휴일 정보를 불러오지 못했어요.");
 
         if (cancelled || !response.ok) {
           return;
@@ -709,10 +732,10 @@ export default function Home() {
           }),
         },
       );
-      const result = (await response.json()) as {
+      const result = await readApiJson<{
         user?: AppUser;
         message?: string;
-      };
+      }>(response, "로그인 처리 중 문제가 생겼어요.");
 
       if (!response.ok || !result.user) {
         throw new Error(result.message ?? "로그인 처리 중 문제가 생겼어요.");
@@ -748,10 +771,10 @@ export default function Home() {
       const response = await fetch(
         `/api/auth/check-username?username=${encodeURIComponent(authUsername)}`,
       );
-      const result = (await response.json()) as {
+      const result = await readApiJson<{
         available?: boolean;
         message?: string;
-      };
+      }>(response, "아이디 확인 중 문제가 생겼어요.");
 
       if (!response.ok) {
         throw new Error(result.message ?? "아이디 확인 중 문제가 생겼어요.");
@@ -785,10 +808,10 @@ export default function Home() {
         },
         body: JSON.stringify({ email: authEmail }),
       });
-      const result = (await response.json()) as {
+      const result = await readApiJson<{
         message?: string;
         devCode?: string;
-      };
+      }>(response, "인증번호 발송 중 문제가 생겼어요.");
 
       if (!response.ok) {
         throw new Error(result.message ?? "인증번호 발송 중 문제가 생겼어요.");
@@ -868,7 +891,10 @@ export default function Home() {
           }),
         });
 
-        const result = (await response.json()) as SiteConnection | { message: string };
+        const result = await readApiJson<SiteConnection | { message: string }>(
+          response,
+          "사이트 추가 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(
@@ -920,7 +946,10 @@ export default function Home() {
         const response = await fetch(`/api/site-connections?id=${siteToRemove.id}`, {
           method: "DELETE",
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "사이트 제거 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "사이트 제거 중 문제가 생겼어요.");
@@ -963,10 +992,10 @@ export default function Home() {
           body: JSON.stringify({ url: linkValue.trim() }),
         });
 
-        const result = (await response.json()) as {
+        const result = await readApiJson<{
           job?: AutomationJob;
           message?: string;
-        };
+        }>(response, "링크 등록 작업을 만들지 못했어요.");
 
         if (!response.ok || !result.job) {
           throw new Error(result.message ?? "링크 등록 작업을 만들지 못했어요.");
@@ -1046,7 +1075,10 @@ export default function Home() {
         const response = await fetch(`/api/campaigns/${campaignToDelete.id}`, {
           method: "DELETE",
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "체험단 삭제 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "체험단 삭제 중 문제가 생겼어요.");
@@ -1094,7 +1126,10 @@ export default function Home() {
           },
           body: JSON.stringify({ selectedDate }),
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "일정 확정 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "일정 확정 중 문제가 생겼어요.");
@@ -1140,7 +1175,10 @@ export default function Home() {
           },
           body: JSON.stringify({ selectedDate: null }),
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "확정 취소 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "확정 취소 중 문제가 생겼어요.");
@@ -1183,7 +1221,10 @@ export default function Home() {
           },
           body: JSON.stringify({ status: "completed" }),
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "체험 완료 처리 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "체험 완료 처리 중 문제가 생겼어요.");
@@ -1221,7 +1262,10 @@ export default function Home() {
           },
           body: JSON.stringify({ status: "review_submitted" }),
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "리뷰 완료 처리 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "리뷰 완료 처리 중 문제가 생겼어요.");
@@ -1254,7 +1298,10 @@ export default function Home() {
           },
           body: JSON.stringify({ status: "scheduled" }),
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "체험 완료 취소 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "체험 완료 취소 중 문제가 생겼어요.");
@@ -1287,7 +1334,10 @@ export default function Home() {
           },
           body: JSON.stringify({ status: "completed" }),
         });
-        const result = (await response.json()) as { message?: string };
+        const result = await readApiJson<{ message?: string }>(
+          response,
+          "리뷰 완료 취소 중 문제가 생겼어요.",
+        );
 
         if (!response.ok) {
           throw new Error(result.message ?? "리뷰 완료 취소 중 문제가 생겼어요.");
@@ -1319,7 +1369,10 @@ export default function Home() {
       const response = await fetch(connector.loginPath, {
         method: "POST",
       });
-      const result = (await response.json()) as { message?: string };
+      const result = await readApiJson<{ message?: string }>(
+        response,
+        `${connector.displayName} 로그인 연동에 실패했어요.`,
+      );
 
       if (!response.ok) {
         throw new Error(result.message ?? `${connector.displayName} 로그인 연동에 실패했어요.`);
