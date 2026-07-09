@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
   deleteSiteConnection,
+  deleteExternalSiteSession,
   findSiteConnectionByDomain,
   findSiteConnectionById,
   insertSiteConnection,
@@ -31,16 +32,7 @@ async function clearLoginSessionByConnectorId(
   connectorId: string,
   userId: string,
 ) {
-  if (connectorId === "reviewnote") {
-    const { clearReviewNoteSession } = await import("@/lib/review-note/session");
-    await clearReviewNoteSession(userId);
-    return;
-  }
-
-  if (connectorId === "gangnam") {
-    const { clearGangnamSession } = await import("@/lib/gangnam/session");
-    await clearGangnamSession(userId);
-  }
+  await deleteExternalSiteSession(userId, connectorId);
 }
 
 function normalizeUrl(rawValue: string) {
