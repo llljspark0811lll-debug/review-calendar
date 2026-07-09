@@ -8,13 +8,8 @@ import {
   insertSiteConnection,
   listSiteConnections,
 } from "@/lib/db";
-import { clearGangnamSession } from "@/lib/gangnam/session";
 import { hasCampaignParserForDomain } from "@/lib/parsers";
-import { clearReviewNoteSession } from "@/lib/review-note/session";
-import {
-  findSiteLoginConnectorByDomain,
-  type SiteLoginConnectorId,
-} from "@/lib/site-login-connectors";
+import { findSiteLoginConnectorByDomain } from "@/lib/site-login-connectors";
 import type { ParserSupport, SiteConnection } from "@/types/site-connection";
 
 export const runtime = "nodejs";
@@ -32,12 +27,21 @@ async function requireUser() {
   return { response: null, user };
 }
 
-const clearLoginSessionByConnectorId: Partial<
-  Record<SiteLoginConnectorId, (userId: string) => Promise<void>>
-> = {
-  reviewnote: clearReviewNoteSession,
-  gangnam: clearGangnamSession,
-};
+async function clearLoginSessionByConnectorId(
+  connectorId: string,
+  userId: string,
+) {
+  if (connectorId === "reviewnote") {
+    const { clearReviewNoteSession } = await import("@/lib/review-note/session");
+    await clearReviewNoteSession(userId);
+    return;
+  }
+
+  if (connectorId === "gangnam") {
+    const { clearGangnamSession } = await import("@/lib/gangnam/session");
+    await clearGangnamSession(userId);
+  }
+}
 
 function normalizeUrl(rawValue: string) {
   const trimmed = rawValue.trim();
@@ -162,12 +166,9 @@ export async function DELETE(request: Request) {
 
   const site = await findSiteConnectionById(id, user.id);
   const connector = site ? findSiteLoginConnectorByDomain(site.domain) : undefined;
-  const clearLoginSession = connector
-    ? clearLoginSessionByConnectorId[connector.id]
-    : undefined;
 
-  if (clearLoginSession) {
-    await clearLoginSession(user.id);
+  if (connector) {
+    await clearLoginSessionByConnectorId(connector.id, user.id);
   }
 
   await deleteSiteConnection(id, user.id);
