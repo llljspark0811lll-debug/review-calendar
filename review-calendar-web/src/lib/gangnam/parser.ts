@@ -1,8 +1,12 @@
+import { lookup } from "node:dns";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
+import { promisify } from "node:util";
 import type { ParsedCampaign } from "@/lib/parsers/types";
 
 const GANGNAM_HOST = "xn--939au0g4vj8sq.net";
+const GANGNAM_FALLBACK_IP = "222.239.248.179";
+const lookupAsync = promisify(lookup);
 
 function compactText(input: string | undefined | null) {
   return (
@@ -89,18 +93,31 @@ function extractAddress(html: string, visitInfo: string) {
 function requestHtml(url: string) {
   return new Promise<string>((resolve, reject) => {
     const parsedUrl = new URL(url);
-    const requestFn = parsedUrl.protocol === "https:" ? httpsRequest : httpRequest;
+    const isHttps = parsedUrl.protocol === "https:";
+    const requestFn = isHttps ? httpsRequest : httpRequest;
     const req = requestFn(
-      parsedUrl,
       {
+        protocol: parsedUrl.protocol,
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: `${parsedUrl.pathname}${parsedUrl.search}`,
         headers: {
           accept: "text/html,application/xhtml+xml",
           "accept-encoding": "identity",
+          host: GANGNAM_HOST,
           "user-agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
         },
+        lookup(hostname, options, callback) {
+          if (hostname === GANGNAM_HOST) {
+            lookup(hostname, { ...options, family: 4 }, callback);
+            return;
+          }
+          lookup(hostname, options, callback);
+        },
         rejectUnauthorized: false,
-        timeout: 15000,
+        servername: GANGNAM_HOST,
+        timeout: 25000,
       },
       (response) => {
         const statusCode = response.statusCode ?? 0;
@@ -140,12 +157,27 @@ function requestHtml(url: string) {
   });
 }
 
-async function fetchGangnamHtml(campaignId: string) {
+async function buildGangnamUrls(campaignId: string) {
   const urls = [
     `http://${GANGNAM_HOST}/cp/?id=${campaignId}`,
+    `http://${GANGNAM_FALLBACK_IP}/cp/?id=${campaignId}`,
     `https://${GANGNAM_HOST}/cp/?id=${campaignId}`,
   ];
 
+  try {
+    const result = await lookupAsync(GANGNAM_HOST, { family: 4 });
+    if (result.address !== GANGNAM_FALLBACK_IP) {
+      urls.splice(1, 0, `http://${result.address}/cp/?id=${campaignId}`);
+    }
+  } catch {
+    // Static fallback IP remains available when DNS lookup fails.
+  }
+
+  return urls;
+}
+
+async function fetchGangnamHtml(campaignId: string) {
+  const urls = await buildGangnamUrls(campaignId);
   let lastError: unknown;
 
   for (const url of urls) {
