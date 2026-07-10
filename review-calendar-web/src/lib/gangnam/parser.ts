@@ -84,26 +84,44 @@ function extractAddress(html: string, visitInfo: string) {
   return "";
 }
 
+async function fetchGangnamHtml(campaignId: string) {
+  const urls = [
+    `http://${GANGNAM_HOST}/cp/?id=${campaignId}`,
+    `https://${GANGNAM_HOST}/cp/?id=${campaignId}`,
+  ];
+
+  let lastError: unknown;
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+        },
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        return response.text();
+      }
+
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const message = lastError instanceof Error ? ` (${lastError.message})` : "";
+  throw new Error(`강남맛집 체험단 정보를 불러오지 못했어요${message}.`);
+}
+
 export async function parseGangnamCampaign(
   campaignId: string,
   href: string,
 ): Promise<ParsedCampaign> {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-  const response = await fetch(`https://${GANGNAM_HOST}/cp/?id=${campaignId}`, {
-    headers: {
-      accept: "text/html,application/xhtml+xml",
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("강남맛집 체험단 정보를 불러오지 못했어요.");
-  }
-
-  const html = await response.text();
+  const html = await fetchGangnamHtml(campaignId);
   const title =
     compactText(extractMatch(html, /<p class="tit">\s*([\s\S]*?)\s*<\/p>/i)) ||
     decodeHtmlAttribute(
@@ -111,6 +129,7 @@ export async function parseGangnamCampaign(
     ) ||
     `강남맛집 체험단 #${campaignId}`;
   const reward =
+    extractDetailValue(html, "제공내역") ||
     compactText(extractMatch(html, /<p class="sub_tit">([\s\S]*?)<\/p>/i)) ||
     decodeHtmlAttribute(
       extractMatch(
