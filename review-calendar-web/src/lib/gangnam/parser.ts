@@ -1,3 +1,5 @@
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import type { ParsedCampaign } from "@/lib/parsers/types";
 
 const GANGNAM_HOST = "xn--939au0g4vj8sq.net";
@@ -84,6 +86,60 @@ function extractAddress(html: string, visitInfo: string) {
   return "";
 }
 
+function requestHtml(url: string) {
+  return new Promise<string>((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const requestFn = parsedUrl.protocol === "https:" ? httpsRequest : httpRequest;
+    const req = requestFn(
+      parsedUrl,
+      {
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          "accept-encoding": "identity",
+          "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+        },
+        rejectUnauthorized: false,
+        timeout: 15000,
+      },
+      (response) => {
+        const statusCode = response.statusCode ?? 0;
+
+        if (
+          statusCode >= 300 &&
+          statusCode < 400 &&
+          response.headers.location
+        ) {
+          response.resume();
+          const redirectUrl = new URL(response.headers.location, parsedUrl).toString();
+          requestHtml(redirectUrl).then(resolve).catch(reject);
+          return;
+        }
+
+        if (statusCode < 200 || statusCode >= 300) {
+          response.resume();
+          reject(new Error(`HTTP ${statusCode}`));
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        response.on("end", () => {
+          resolve(Buffer.concat(chunks).toString("utf8"));
+        });
+      },
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error("request timeout"));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 async function fetchGangnamHtml(campaignId: string) {
   const urls = [
     `http://${GANGNAM_HOST}/cp/?id=${campaignId}`,
@@ -94,20 +150,7 @@ async function fetchGangnamHtml(campaignId: string) {
 
   for (const url of urls) {
     try {
-      const response = await fetch(url, {
-        headers: {
-          accept: "text/html,application/xhtml+xml",
-          "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
-        },
-        cache: "no-store",
-      });
-
-      if (response.ok) {
-        return response.text();
-      }
-
-      lastError = new Error(`HTTP ${response.status}`);
+      return await requestHtml(url);
     } catch (error) {
       lastError = error;
     }
