@@ -11,29 +11,6 @@ export type AppUser = {
   createdAt: string;
 };
 
-export type AutomationJobStatus = "pending" | "running" | "succeeded" | "failed";
-export type AutomationJobType = "parse_campaign";
-
-export type AutomationJob = {
-  id: string;
-  userId: string;
-  type: AutomationJobType;
-  status: AutomationJobStatus;
-  input: {
-    url: string;
-    companyPhone?: string;
-  };
-  result: {
-    campaignId?: string;
-  } | null;
-  errorMessage: string | null;
-  attempts: number;
-  createdAt: string;
-  updatedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-};
-
 type UserRow = {
   id: string;
   username: string;
@@ -78,20 +55,6 @@ type CampaignRow = Omit<
 type SiteConnectionRow = SiteConnection;
 type HolidayRow = Holiday;
 type HolidayOverrideAction = "add" | "hide" | "rename";
-type AutomationJobRow = {
-  id: string;
-  userId: string;
-  type: AutomationJobType;
-  status: AutomationJobStatus;
-  input: AutomationJob["input"];
-  result: AutomationJob["result"];
-  errorMessage: string | null;
-  attempts: number;
-  createdAt: string;
-  updatedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-};
 
 declare global {
   var __reviewCalendarSql: ReturnType<typeof postgres> | undefined;
@@ -270,33 +233,6 @@ async function ensureSchema() {
         CREATE UNIQUE INDEX IF NOT EXISTS site_connections_user_domain_idx
         ON site_connections(user_id, domain)
         WHERE user_id IS NOT NULL
-      `;
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS automation_jobs (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          type TEXT NOT NULL,
-          status TEXT NOT NULL,
-          input JSONB NOT NULL,
-          result JSONB,
-          error_message TEXT,
-          attempts INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          started_at TEXT,
-          finished_at TEXT
-        )
-      `;
-
-      await sql`
-        CREATE INDEX IF NOT EXISTS automation_jobs_user_id_idx
-        ON automation_jobs(user_id)
-      `;
-
-      await sql`
-        CREATE INDEX IF NOT EXISTS automation_jobs_status_created_at_idx
-        ON automation_jobs(status, created_at)
       `;
 
       await sql`
@@ -741,169 +677,6 @@ export async function findSiteConnectionById(id: string, userId: string) {
   `;
 
   return rows[0];
-}
-
-function mapAutomationJob(row: AutomationJobRow): AutomationJob {
-  return {
-    id: row.id,
-    userId: row.userId,
-    type: row.type,
-    status: row.status,
-    input: row.input,
-    result: row.result,
-    errorMessage: row.errorMessage,
-    attempts: row.attempts,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    startedAt: row.startedAt,
-    finishedAt: row.finishedAt,
-  };
-}
-
-const automationJobSelect = `
-  SELECT
-    id,
-    user_id AS "userId",
-    type,
-    status,
-    input,
-    result,
-    error_message AS "errorMessage",
-    attempts,
-    created_at AS "createdAt",
-    updated_at AS "updatedAt",
-    started_at AS "startedAt",
-    finished_at AS "finishedAt"
-  FROM automation_jobs
-`;
-
-export async function insertAutomationJob(input: {
-  id: string;
-  userId: string;
-  type: AutomationJobType;
-  input: AutomationJob["input"];
-}) {
-  await ensureSchema();
-  const sql = getSql();
-  const now = new Date().toISOString();
-
-  await sql`
-    INSERT INTO automation_jobs (
-      id, user_id, type, status, input, created_at, updated_at
-    ) VALUES (
-      ${input.id}, ${input.userId}, ${input.type}, 'pending', ${sql.json(input.input)}, ${now}, ${now}
-    )
-  `;
-
-  return {
-    id: input.id,
-    userId: input.userId,
-    type: input.type,
-    status: "pending" as const,
-    input: input.input,
-    result: null,
-    errorMessage: null,
-    attempts: 0,
-    createdAt: now,
-    updatedAt: now,
-    startedAt: null,
-    finishedAt: null,
-  };
-}
-
-export async function findAutomationJobById(id: string, userId: string) {
-  await ensureSchema();
-  const sql = getSql();
-  const rows = await sql<AutomationJobRow[]>`
-    ${sql.unsafe(automationJobSelect)}
-    WHERE id = ${id} AND user_id = ${userId}
-    LIMIT 1
-  `;
-
-  return rows[0] ? mapAutomationJob(rows[0]) : undefined;
-}
-
-export async function claimNextAutomationJob() {
-  await ensureSchema();
-  const sql = getSql();
-
-  return sql.begin(async (transaction) => {
-    const jobs = await transaction<AutomationJobRow[]>`
-      ${transaction.unsafe(automationJobSelect)}
-      WHERE status = 'pending'
-      ORDER BY created_at ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    `;
-    const job = jobs[0];
-
-    if (!job) {
-      return undefined;
-    }
-
-    const now = new Date().toISOString();
-    const updatedJobs = await transaction<AutomationJobRow[]>`
-      UPDATE automation_jobs
-      SET
-        status = 'running',
-        attempts = attempts + 1,
-        started_at = ${now},
-        updated_at = ${now},
-        error_message = NULL
-      WHERE id = ${job.id}
-      RETURNING
-        id,
-        user_id AS "userId",
-        type,
-        status,
-        input,
-        result,
-        error_message AS "errorMessage",
-        attempts,
-        created_at AS "createdAt",
-        updated_at AS "updatedAt",
-        started_at AS "startedAt",
-        finished_at AS "finishedAt"
-    `;
-
-    return updatedJobs[0] ? mapAutomationJob(updatedJobs[0]) : undefined;
-  });
-}
-
-export async function markAutomationJobSucceeded(
-  id: string,
-  result: AutomationJob["result"],
-) {
-  await ensureSchema();
-  const sql = getSql();
-  const now = new Date().toISOString();
-
-  await sql`
-    UPDATE automation_jobs
-    SET
-      status = 'succeeded',
-      result = ${sql.json(result ?? {})},
-      error_message = NULL,
-      updated_at = ${now},
-      finished_at = ${now}
-    WHERE id = ${id}
-  `;
-}
-
-export async function markAutomationJobFailed(id: string, errorMessage: string) {
-  await ensureSchema();
-  const sql = getSql();
-  const now = new Date().toISOString();
-
-  await sql`
-    UPDATE automation_jobs
-    SET
-      status = 'failed',
-      error_message = ${errorMessage},
-      updated_at = ${now},
-      finished_at = ${now}
-    WHERE id = ${id}
-  `;
 }
 
 function mapHoliday(row: HolidayRow): Holiday {

@@ -15,7 +15,6 @@
 - 언어: `TypeScript`
 - DB: `PostgreSQL` via `postgres`
 - 개발 서버: `http://localhost:3005`
-- 자동화 워커: `npm.cmd run worker`
 
 ## 환경변수
 
@@ -44,12 +43,11 @@
 - 로그인하지 않은 사용자는 체험단, 사이트 등록, 공휴일 API를 사용할 수 없다.
 - 체험단 / 사이트 등록 데이터는 `userId` 기준으로 분리한다.
 
-### 0-1. 자동화 워커
+### 0-1. 공개 파싱
 
-- 체험단 링크 등록 API는 즉시 파싱하지 않고 `automation_jobs`에 작업을 만든다.
-- 로컬/서버 워커는 `npm.cmd run worker`로 실행한다.
-- 워커는 `pending` 작업을 가져와 사이트별 공개 파서를 실행하고, 성공 시 `campaigns`에 저장한다.
-- 작업 상태는 `pending`, `running`, `succeeded`, `failed` 순서로 관리한다.
+- 체험단 링크 등록 API는 Vercel 서버에서 공개 정보를 바로 파싱하고 `campaigns`에 저장한다.
+- 별도 자동화 워커를 사용하지 않는다.
+- 로그인 세션이나 Playwright 없이 공개 HTML/API에서 접근 가능한 정보만 파싱한다.
 
 ### 1. 사이트 관리
 
@@ -153,7 +151,6 @@
 - `GET /api/auth/me`
 - `GET /api/auth/check-username`
 - `POST /api/auth/send-email-code`
-- `GET /api/automation-jobs/[id]`
 - `POST /api/campaigns`
 - `PATCH /api/campaigns/[id]/schedule`
 - `PATCH /api/campaigns/[id]/status`

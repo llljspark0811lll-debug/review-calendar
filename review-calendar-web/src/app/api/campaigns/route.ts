@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { findSiteConnectionByDomain, insertAutomationJob } from "@/lib/db";
+import { findSiteConnectionByDomain, insertCampaign } from "@/lib/db";
+import { parseCampaignLink } from "@/lib/parsers";
+import type { Campaign } from "@/types/campaign";
 
 export const runtime = "nodejs";
 
@@ -63,17 +65,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const job = await insertAutomationJob({
+    const parsed = await parseCampaignLink(url, user.id);
+    const campaign: Campaign = {
+      ...parsed,
       id: randomUUID(),
-      userId: user.id,
-      type: "parse_campaign",
-      input: {
-        url,
-        companyPhone,
-      },
-    });
+      companyPhone,
+      contactLocked: false,
+    };
 
-    return NextResponse.json({ job }, { status: 202 });
+    await insertCampaign(campaign, user.id);
+
+    return NextResponse.json({ campaign }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       {

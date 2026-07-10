@@ -22,14 +22,6 @@ type AppUser = {
   createdAt: string;
 };
 type AuthMode = "login" | "register";
-type AutomationJob = {
-  id: string;
-  status: "pending" | "running" | "succeeded" | "failed";
-  result: {
-    campaignId?: string;
-  } | null;
-  errorMessage: string | null;
-};
 
 type CheckpointTone = "pink" | "yellow" | "lavender";
 
@@ -490,32 +482,6 @@ export default function Home() {
     return nextCampaigns;
   }
 
-  async function waitForAutomationJob(jobId: string) {
-    for (let attempt = 0; attempt < 80; attempt += 1) {
-      const response = await fetch(`/api/automation-jobs/${jobId}`);
-      const result = await readApiJson<{
-        job?: AutomationJob;
-        message?: string;
-      }>(response, "자동 등록 작업 상태를 확인하지 못했어요.");
-
-      if (!response.ok || !result.job) {
-        throw new Error(result.message ?? "자동 등록 작업 상태를 확인하지 못했어요.");
-      }
-
-      if (result.job.status === "succeeded") {
-        return result.job;
-      }
-
-      if (result.job.status === "failed") {
-        throw new Error(result.job.errorMessage ?? "자동 등록 작업에 실패했어요.");
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-
-    throw new Error("자동 등록 작업이 아직 처리 중이에요. 잠시 뒤 목록을 새로고침해 주세요.");
-  }
-
   useEffect(() => {
     let cancelled = false;
 
@@ -885,20 +851,18 @@ export default function Home() {
         });
 
         const result = await readApiJson<{
-          job?: AutomationJob;
+          campaign?: Campaign;
           message?: string;
-        }>(response, "링크 등록 작업을 만들지 못했어요.");
+        }>(response, "체험단을 등록하지 못했어요.");
 
-        if (!response.ok || !result.job) {
-          throw new Error(result.message ?? "링크 등록 작업을 만들지 못했어요.");
+        if (!response.ok || !result.campaign) {
+          throw new Error(result.message ?? "체험단을 등록하지 못했어요.");
         }
 
-        const completedJob = await waitForAutomationJob(result.job.id);
         const nextCampaigns = await refreshBootstrap();
         const nextCampaign =
-          nextCampaigns.find(
-            (campaign) => campaign.id === completedJob.result?.campaignId,
-          ) ?? nextCampaigns[0];
+          nextCampaigns.find((campaign) => campaign.id === result.campaign?.id) ??
+          nextCampaigns[0];
 
         setSelectedId(nextCampaign?.id ?? null);
         closeRegisterModal();
