@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { listCampaigns, listHolidaysInRange, listSiteConnections } from "@/lib/db";
+import { listCampaigns, listHolidaysInRange } from "@/lib/db";
 import { ensureHolidayCoverageForYears } from "@/lib/holidays";
 
 export const runtime = "nodejs";
@@ -21,7 +21,6 @@ export async function GET() {
 
   return NextResponse.json({
     campaigns: await listCampaigns(user.id),
-    siteConnections: await listSiteConnections(user.id),
     holidays: await listHolidaysInRange(`${currentYear}-01-01`, `${currentYear + 1}-12-31`),
     holidaySyncEnabled: Boolean(process.env.DATA_GO_KR_SERVICE_KEY),
   });

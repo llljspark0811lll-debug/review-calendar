@@ -3,7 +3,6 @@
 import { type FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import type { Campaign, CampaignStatus } from "@/types/campaign";
 import type { Holiday } from "@/types/holiday";
-import type { SiteConnection } from "@/types/site-connection";
 
 const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
 const dashboardTabs = [
@@ -290,7 +289,6 @@ export default function Home() {
   const [isEmailCodePending, setIsEmailCodePending] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [siteConnections, setSiteConnections] = useState<SiteConnection[]>([]);
   const [activeDashboardTab, setActiveDashboardTab] =
     useState<DashboardTabId>("calendar");
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
@@ -298,27 +296,19 @@ export default function Home() {
   const [selectedCampaignPage, setSelectedCampaignPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [campaignToDelete, setCampaignToDelete] = useState<Campaign | null>(null);
-  const [siteToRemove, setSiteToRemove] = useState<SiteConnection | null>(null);
   const [activeCheckpointId, setActiveCheckpointId] =
     useState<CheckpointCardData["id"] | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
-  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [activeDateCell, setActiveDateCell] = useState<CalendarCell | null>(null);
   const [linkValue, setLinkValue] = useState("");
   const [companyPhoneValue, setCompanyPhoneValue] = useState("");
-  const [siteNameValue, setSiteNameValue] = useState("");
-  const [siteUrlValue, setSiteUrlValue] = useState("");
   const [registerErrorMessage, setRegisterErrorMessage] = useState("");
-  const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
-  const [connectionHelperMessage, setConnectionHelperMessage] = useState("");
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [scheduleErrorMessage, setScheduleErrorMessage] = useState("");
-  const [siteFormErrorMessage, setSiteFormErrorMessage] = useState("");
   const [isBootstrapLoading, setIsBootstrapLoading] = useState(true);
   const [holidaySyncEnabled, setHolidaySyncEnabled] = useState(false);
   const [isSchedulePending, setIsSchedulePending] = useState(false);
   const [isDeletePending, setIsDeletePending] = useState(false);
-  const [isSiteRemovePending, setIsSiteRemovePending] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const todayIso = formatIsoDate(
@@ -456,15 +446,12 @@ export default function Home() {
 
     return Array.from(years).sort((left, right) => left - right);
   })();
-  const registeredSitesCount = siteConnections.length;
-
   async function refreshBootstrap() {
     const response = await fetch("/api/bootstrap");
     const result = await readApiJson<{
       campaigns?: Campaign[];
       holidays?: Holiday[];
       holidaySyncEnabled?: boolean;
-      siteConnections?: SiteConnection[];
       message?: string;
     }>(response, "데이터를 다시 불러오지 못했어요.");
 
@@ -476,7 +463,6 @@ export default function Home() {
 
     setCampaigns(nextCampaigns);
     setHolidays(result.holidays ?? []);
-    setSiteConnections(result.siteConnections ?? []);
     setHolidaySyncEnabled(Boolean(result.holidaySyncEnabled));
 
     return nextCampaigns;
@@ -527,7 +513,6 @@ export default function Home() {
           campaigns?: Campaign[];
           holidays?: Holiday[];
           holidaySyncEnabled?: boolean;
-          siteConnections?: SiteConnection[];
         }>(response, "데이터를 불러오지 못했어요.");
 
         if (!response.ok || cancelled) {
@@ -538,7 +523,6 @@ export default function Home() {
 
         setCampaigns(nextCampaigns);
         setHolidays(result.holidays ?? []);
-        setSiteConnections(result.siteConnections ?? []);
         setHolidaySyncEnabled(Boolean(result.holidaySyncEnabled));
         setSelectedId(nextCampaigns[0]?.id ?? null);
       })
@@ -715,7 +699,6 @@ export default function Home() {
     setCurrentUser(null);
     setCampaigns([]);
     setHolidays([]);
-    setSiteConnections([]);
     setSelectedId(null);
   }
 
@@ -731,107 +714,6 @@ export default function Home() {
     setCompanyPhoneValue("");
     setRegisterErrorMessage("");
     setIsRegisterModalOpen(false);
-  }
-
-  function openConnectionModal() {
-    setConnectionErrorMessage("");
-    setConnectionHelperMessage("");
-    setSiteFormErrorMessage("");
-    setIsConnectionModalOpen(true);
-  }
-
-  function handleAddSite() {
-    setSiteFormErrorMessage("");
-
-    void (async () => {
-      try {
-        const response = await fetch("/api/site-connections", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            siteName: siteNameValue,
-            baseUrl: siteUrlValue,
-          }),
-        });
-
-        const result = await readApiJson<SiteConnection | { message: string }>(
-          response,
-          "사이트 추가 중 문제가 생겼어요.",
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            "message" in result ? result.message : "사이트 추가 중 문제가 생겼어요.",
-          );
-        }
-
-        const nextSite = result as SiteConnection;
-
-        setSiteConnections((current) => [nextSite, ...current]);
-        setSiteNameValue("");
-        setSiteUrlValue("");
-
-        if (nextSite.parserStatus === "supported") {
-          setConnectionHelperMessage(
-            "이 사이트는 자동 등록 파서가 준비돼 있어요. 선정 링크와 업체 연락처를 입력하면 캘린더에 등록할 수 있어요.",
-          );
-        } else {
-          setConnectionHelperMessage(
-            "사이트 목록에는 추가됐어요. 아직 이 도메인의 자동 등록 파서는 준비 중이에요.",
-          );
-        }
-      } catch (error) {
-        setSiteFormErrorMessage(
-          error instanceof Error ? error.message : "사이트 추가 중 문제가 생겼어요.",
-        );
-      }
-    })();
-  }
-
-  function handleRequestRemoveSite(site: SiteConnection) {
-    setConnectionErrorMessage("");
-    setConnectionHelperMessage("");
-    setSiteToRemove(site);
-  }
-
-  function handleConfirmRemoveSite() {
-    if (!siteToRemove) {
-      return;
-    }
-
-    setIsSiteRemovePending(true);
-    setConnectionErrorMessage("");
-    setConnectionHelperMessage("");
-
-    void (async () => {
-      try {
-        const response = await fetch(`/api/site-connections?id=${siteToRemove.id}`, {
-          method: "DELETE",
-        });
-        const result = await readApiJson<{ message?: string }>(
-          response,
-          "사이트 제거 중 문제가 생겼어요.",
-        );
-
-        if (!response.ok) {
-          throw new Error(result.message ?? "사이트 제거 중 문제가 생겼어요.");
-        }
-
-        setSiteConnections((current) =>
-          current.filter((site) => site.id !== siteToRemove.id),
-        );
-        setConnectionHelperMessage(`${siteToRemove.siteName} 사이트를 제거했어요.`);
-        setSiteToRemove(null);
-      } catch (error) {
-        setConnectionErrorMessage(
-          error instanceof Error ? error.message : "사이트 제거 중 문제가 생겼어요.",
-        );
-      } finally {
-        setIsSiteRemovePending(false);
-      }
-    })();
   }
 
   function handleRegisterLink() {
@@ -1265,7 +1147,7 @@ export default function Home() {
           <div className="relative rounded-[38px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,245,250,0.98),rgba(255,238,247,0.88))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-8">
             <div>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,760px)_minmax(280px,1fr)] xl:items-start">
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4">
                   <button
                     onClick={openRegisterModal}
                     className="relative min-h-[190px] overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] px-7 py-8 text-left text-white shadow-[0_24px_42px_rgba(239,139,192,0.34)] transition-transform hover:-translate-y-1"
@@ -1288,27 +1170,6 @@ export default function Home() {
                     </div>
                   </button>
 
-                  <button
-                    onClick={openConnectionModal}
-                    className="relative min-h-[190px] overflow-hidden rounded-[34px] border border-white/85 bg-white/94 px-7 py-8 text-left text-[#c4518a] shadow-[0_22px_38px_rgba(255,191,220,0.22)] transition-transform hover:-translate-y-1"
-                  >
-                    <div className="absolute -left-5 bottom-0 h-20 w-20 rounded-full bg-[#fff2f8]" />
-                    <div className="relative z-10 flex items-start justify-between gap-5">
-                      <div className="min-w-0">
-                        <span className="block font-display text-[38px] leading-none">
-                          사이트 관리
-                        </span>
-                        <span className="mt-5 block max-w-[220px] text-base leading-7 text-[#c97aa4]">
-                          자주 쓰는 체험단 사이트를 등록해요
-                        </span>
-                      </div>
-                      <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-[#fff3f8] text-[#cf5f97]">
-                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-9 w-9" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M12 20.2L10.55 18.88C5.4 14.2 2 11.11 2 7.32C2 4.23 4.42 2 7.5 2C9.24 2 10.91 2.81 12 4.09C13.09 2.81 14.76 2 16.5 2C19.58 2 22 4.23 22 7.32C22 11.11 18.6 14.2 13.45 18.89L12 20.2Z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
-                        </svg>
-                      </span>
-                    </div>
-                  </button>
                 </div>
 
                 <div className="flex min-h-[190px] items-start xl:justify-end">
@@ -1636,8 +1497,8 @@ export default function Home() {
                   text="text-[#8f5c14]"
                 />
                 <StatCard
-                  title="등록 사이트"
-                  value={`${registeredSitesCount}`.padStart(2, "0")}
+                  title="등록 체험단"
+                  value={`${campaigns.length}`.padStart(2, "0")}
                   bg="bg-[#eee1ff]"
                   text="text-[#7044a0]"
                 />
@@ -1775,134 +1636,6 @@ export default function Home() {
         </div>
       ) : null}
 
-      {isConnectionModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
-                  사이트 관리
-                </p>
-                <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
-                  체험단 사이트 등록
-                </h2>
-                <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-                  자주 사용하는 체험단 사이트를 등록해두면 선정 링크를 등록할 때
-                  해당 사이트의 공개 정보를 자동으로 불러올 수 있어요.
-                </p>
-              </div>
-              <button
-                onClick={() => setIsConnectionModalOpen(false)}
-                className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)]"
-              >
-                닫기
-              </button>
-            </div>
-
-            <div className="mt-6 grid gap-4">
-              <div className="rounded-[30px] border border-white/70 bg-white/85 p-5 shadow-[0_18px_28px_rgba(255,196,223,0.2)]">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h3 className="text-2xl font-black text-[#8d315f]">
-                      사이트 직접 추가
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[#8a5d75]">
-                      체험단 사이트 이름과 주소를 직접 등록해 목록으로 관리하세요.
-                      사이트별 자동 등록 파서가 준비된 곳은 선정 링크를 바로 불러올 수 있어요.
-                    </p>
-                  </div>
-                  <Badge tone="lavender">사용자 추가형 사이트</Badge>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="text-sm font-black text-[#b94a81]">
-                      사이트 이름
-                    </span>
-                    <input
-                      value={siteNameValue}
-                      onChange={(event) => setSiteNameValue(event.target.value)}
-                      placeholder="예: 리뷰노트, 강남맛집"
-                      className="mt-2 w-full rounded-[18px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-3 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-black text-[#b94a81]">
-                      사이트 주소
-                    </span>
-                    <input
-                      value={siteUrlValue}
-                      onChange={(event) => setSiteUrlValue(event.target.value)}
-                      placeholder="https://www.reviewnote.co.kr"
-                      className="mt-2 w-full rounded-[18px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-3 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
-                    />
-                  </label>
-                </div>
-
-                {siteFormErrorMessage ? (
-                  <p className="mt-4 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
-                    {siteFormErrorMessage}
-                  </p>
-                ) : null}
-
-                <div className="mt-5 flex justify-end">
-                  <button
-                    onClick={handleAddSite}
-                    className="rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)]"
-                  >
-                    사이트 추가
-                  </button>
-                </div>
-              </div>
-
-              {siteConnections.length ? (
-                siteConnections.map((site) => {
-                  const isSupportedSite = site.parserStatus === "supported";
-                  const statusLabel = isSupportedSite
-                    ? "자동 등록 가능"
-                    : "파싱 준비 중";
-                  const statusTone = isSupportedSite ? "connected" : "comingSoon";
-                  const description = isSupportedSite
-                    ? "이 도메인의 자동 등록 파서가 준비돼 있어요. 선정 링크와 업체 연락처를 입력하면 정보를 불러올 수 있어요."
-                    : "사이트는 등록됐지만, 이 도메인의 상세 파싱은 아직 준비되지 않았어요.";
-
-                  return (
-                    <SiteConnectionCard
-                      key={site.id}
-                      siteName={site.siteName}
-                      domain={site.domain}
-                      description={description}
-                      statusLabel={statusLabel}
-                      statusTone={statusTone}
-                      parserLabel={
-                        isSupportedSite ? "자동 등록 지원" : "자동 등록 준비 중"
-                      }
-                      onRemove={() => handleRequestRemoveSite(site)}
-                    />
-                  );
-                })
-              ) : (
-                <div className="rounded-[30px] border border-dashed border-[#f0bfd8] bg-white/70 px-5 py-8 text-center text-sm leading-7 text-[#9a6280]">
-                  아직 등록된 사이트가 없어요. 사용하는 체험단 사이트를 직접 추가해
-                  연동 목록을 만들어보세요.
-                </div>
-              )}
-            </div>
-
-            {connectionHelperMessage ? (
-              <p className="mt-5 rounded-[18px] bg-[#e8ddff] px-4 py-3 text-sm font-bold text-[#7340a8]">
-                {connectionHelperMessage}
-              </p>
-            ) : null}
-            {connectionErrorMessage ? (
-              <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
-                {connectionErrorMessage}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       {activeDateCell?.dateIso ? (
         <DatePickModal
           dateIso={activeDateCell.dateIso}
@@ -1946,18 +1679,6 @@ export default function Home() {
         />
       ) : null}
 
-      {siteToRemove ? (
-        <RemoveSiteConfirmModal
-          site={siteToRemove}
-          isPending={isSiteRemovePending}
-          onClose={() => {
-            if (!isSiteRemovePending) {
-              setSiteToRemove(null);
-            }
-          }}
-          onConfirm={handleConfirmRemoveSite}
-        />
-      ) : null}
     </main>
   );
 }
@@ -2034,7 +1755,7 @@ function AuthScreen({
             </p>
             <div className="mt-10 grid gap-3 text-sm font-black text-white/90">
               <div className="rounded-[24px] bg-white/14 px-4 py-3">캘린더 일정 관리</div>
-              <div className="rounded-[24px] bg-white/14 px-4 py-3">사이트 관리</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">선정 링크 자동 등록</div>
               <div className="rounded-[24px] bg-white/14 px-4 py-3">리뷰 마감 체크</div>
             </div>
           </div>
@@ -2591,63 +2312,6 @@ function CampaignDetailSection({
   );
 }
 
-function SiteConnectionCard({
-  siteName,
-  domain,
-  description,
-  statusLabel,
-  statusTone,
-  parserLabel,
-  onRemove,
-}: {
-  siteName: string;
-  domain: string;
-  description: string;
-  statusLabel: string;
-  statusTone: "connected" | "pending" | "comingSoon";
-  parserLabel: string;
-  onRemove: () => void;
-}) {
-  const toneClass =
-    statusTone === "connected"
-      ? "bg-[#ddfff4] text-[#26766a]"
-      : statusTone === "comingSoon"
-        ? "bg-[#fff0bf] text-[#8b5e1c]"
-        : "bg-[#ffe1ef] text-[#b24f7f]";
-
-  return (
-    <div className="rounded-[30px] border border-white/70 bg-white/85 p-5 shadow-[0_18px_28px_rgba(255,196,223,0.2)]">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h3 className="text-2xl font-black text-[#8d315f]">{siteName}</h3>
-            <span
-              className={`inline-flex rounded-full px-3 py-1 text-xs font-bold tracking-[0.08em] ${toneClass}`}
-            >
-              {statusLabel}
-            </span>
-            <span className="inline-flex rounded-full bg-[#fff1f8] px-3 py-1 text-xs font-bold tracking-[0.08em] text-[#b24f7f]">
-              {parserLabel}
-            </span>
-          </div>
-          <p className="mt-2 text-xs font-bold tracking-[0.08em] text-[#c1789f]">
-            {domain}
-          </p>
-          <p className="mt-3 text-sm leading-6 text-[#8a5d75]">{description}</p>
-        </div>
-        <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-          <button
-            onClick={onRemove}
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c55a90] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
-          >
-            목록에서 제거
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function DatePickModal({
   dateIso,
   holidayName,
@@ -3000,70 +2664,4 @@ function DeleteCampaignConfirmModal({
   );
 }
 
-function RemoveSiteConfirmModal({
-  site,
-  isPending,
-  onClose,
-  onConfirm,
-}: {
-  site: SiteConnection;
-  isPending: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
-              사이트 제거 확인
-            </p>
-            <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
-              연동 목록에서 제거할까요?
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={isPending}
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            닫기
-          </button>
-        </div>
-
-        <div className="mt-5 rounded-[24px] border border-[#ffd4e7] bg-[#fff8fc] p-4">
-          <div className="flex flex-wrap gap-2">
-            <Badge>{site.parserStatus === "supported" ? "자동 등록 지원" : "준비 중"}</Badge>
-          </div>
-          <h3 className="mt-3 text-2xl font-black text-[#8d315f]">
-            {site.siteName}
-          </h3>
-          <p className="mt-2 text-sm font-bold text-[#b05b86]">{site.domain}</p>
-          <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-            제거하면 이 사이트의 링크를 새로 등록할 수 없고, 다시 사용하려면 사이트를
-            다시 추가해야 해요.
-          </p>
-        </div>
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={isPending}
-            className="inline-flex min-w-[96px] items-center justify-center whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c55a90] shadow-[0_10px_18px_rgba(255,190,219,0.25)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            취소
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isPending}
-            className="inline-flex min-w-[112px] items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-4 py-2 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? "제거 중..." : "제거하기"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 

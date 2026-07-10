@@ -1,7 +1,6 @@
 import postgres from "postgres";
 import type { Campaign } from "@/types/campaign";
 import type { Holiday, HolidayType } from "@/types/holiday";
-import type { SiteConnection } from "@/types/site-connection";
 
 export type AppUser = {
   id: string;
@@ -52,7 +51,6 @@ type CampaignRow = Omit<
   createdAt: string;
 };
 
-type SiteConnectionRow = SiteConnection;
 type HolidayRow = Holiday;
 type HolidayOverrideAction = "add" | "hide" | "rename";
 
@@ -192,47 +190,13 @@ async function ensureSchema() {
       `;
 
       await sql`
-        CREATE TABLE IF NOT EXISTS site_connections (
-        id TEXT PRIMARY KEY,
-        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-        site_name TEXT NOT NULL,
-        base_url TEXT NOT NULL,
-        login_url TEXT NOT NULL,
-        domain TEXT NOT NULL,
-        parser_status TEXT NOT NULL,
-        created_at TEXT NOT NULL
-        )
-      `;
-
-      await sql`
         ALTER TABLE campaigns
         ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE
       `;
 
       await sql`
-        ALTER TABLE site_connections
-        ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE
-      `;
-
-      await sql`
-        ALTER TABLE site_connections
-        DROP CONSTRAINT IF EXISTS site_connections_domain_key
-      `;
-
-      await sql`
         CREATE INDEX IF NOT EXISTS campaigns_user_id_idx
         ON campaigns(user_id)
-      `;
-
-      await sql`
-        CREATE INDEX IF NOT EXISTS site_connections_user_id_idx
-        ON site_connections(user_id)
-      `;
-
-      await sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS site_connections_user_domain_idx
-        ON site_connections(user_id, domain)
-        WHERE user_id IS NOT NULL
       `;
 
       await sql`
@@ -593,90 +557,6 @@ export async function deleteCampaign(id: string, userId: string) {
   await ensureSchema();
   const sql = getSql();
   await sql`DELETE FROM campaigns WHERE id = ${id} AND user_id = ${userId}`;
-}
-
-export async function listSiteConnections(userId: string) {
-  await ensureSchema();
-  const sql = getSql();
-
-  return sql<SiteConnectionRow[]>`
-    SELECT
-      id,
-      site_name AS "siteName",
-      base_url AS "baseUrl",
-      login_url AS "loginUrl",
-      domain,
-      parser_status AS "parserStatus",
-      created_at AS "createdAt"
-    FROM site_connections
-    WHERE user_id = ${userId}
-    ORDER BY created_at DESC
-  `;
-}
-
-export async function insertSiteConnection(
-  siteConnection: SiteConnection,
-  userId: string,
-) {
-  await ensureSchema();
-  const sql = getSql();
-
-  await sql`
-    INSERT INTO site_connections (
-      id, user_id, site_name, base_url, login_url, domain, parser_status, created_at
-    ) VALUES (
-      ${siteConnection.id}, ${userId}, ${siteConnection.siteName}, ${siteConnection.baseUrl}, ${siteConnection.loginUrl},
-      ${siteConnection.domain}, ${siteConnection.parserStatus}, ${siteConnection.createdAt}
-    )
-  `;
-
-  return siteConnection;
-}
-
-export async function deleteSiteConnection(id: string, userId: string) {
-  await ensureSchema();
-  const sql = getSql();
-  await sql`DELETE FROM site_connections WHERE id = ${id} AND user_id = ${userId}`;
-}
-
-export async function findSiteConnectionByDomain(domain: string, userId: string) {
-  await ensureSchema();
-  const sql = getSql();
-  const rows = await sql<SiteConnectionRow[]>`
-    SELECT
-      id,
-      site_name AS "siteName",
-      base_url AS "baseUrl",
-      login_url AS "loginUrl",
-      domain,
-      parser_status AS "parserStatus",
-      created_at AS "createdAt"
-    FROM site_connections
-    WHERE domain = ${domain} AND user_id = ${userId}
-    LIMIT 1
-  `;
-
-  return rows[0];
-}
-
-export async function findSiteConnectionById(id: string, userId: string) {
-  await ensureSchema();
-  const sql = getSql();
-  const rows = await sql<SiteConnectionRow[]>`
-    SELECT
-      id,
-      site_name AS "siteName",
-      base_url AS "baseUrl",
-      login_url AS "loginUrl",
-      domain,
-      parser_status AS "parserStatus",
-      created_at AS "createdAt"
-    FROM site_connections
-    WHERE id = ${id} AND user_id = ${userId}
-    LIMIT 1
-  `;
-
-  return rows[0];
 }
 
 function mapHoliday(row: HolidayRow): Holiday {

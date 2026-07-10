@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     if (!body.url) {
       return NextResponse.json(
-        { message: "링크가 비어 있어요." },
+        { message: "링크를 입력해 주세요." },
         { status: 400 },
       );
     }
