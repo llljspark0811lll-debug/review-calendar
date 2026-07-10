@@ -22,24 +22,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "로그인이 필요해요." }, { status: 401 });
     }
 
-    const body = (await request.json()) as { url?: string };
+    const body = (await request.json()) as {
+      url?: string;
+      companyPhone?: string;
+    };
+    const url = body.url?.trim();
+    const companyPhone = body.companyPhone?.trim();
 
-    if (!body.url) {
+    if (!url) {
       return NextResponse.json(
-        { message: "링크가 비어 있어요." },
+        { message: "선정 상세 링크를 입력해 주세요." },
         { status: 400 },
       );
     }
 
-    const domain = normalizeDomain(body.url);
+    if (!companyPhone) {
+      return NextResponse.json(
+        { message: "업체 연락처를 입력해 주세요." },
+        { status: 400 },
+      );
+    }
+
+    const domain = normalizeDomain(url);
     const siteConnection = await findSiteConnectionByDomain(domain, user.id);
 
     if (!siteConnection) {
       return NextResponse.json(
-        {
-          message:
-            "먼저 사이트 연동에서 해당 체험단 사이트를 등록하고 로그인 연동을 완료해 주세요.",
-        },
+        { message: "먼저 사이트 관리에서 해당 체험단 사이트를 등록해 주세요." },
         { status: 400 },
       );
     }
@@ -59,7 +68,8 @@ export async function POST(request: Request) {
       userId: user.id,
       type: "parse_campaign",
       input: {
-        url: body.url,
+        url,
+        companyPhone,
       },
     });
 

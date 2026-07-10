@@ -3,14 +3,11 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
   deleteSiteConnection,
-  deleteExternalSiteSession,
   findSiteConnectionByDomain,
-  findSiteConnectionById,
   insertSiteConnection,
   listSiteConnections,
 } from "@/lib/db";
 import { hasCampaignParserForDomain } from "@/lib/parsers";
-import { findSiteLoginConnectorByDomain } from "@/lib/site-login-connectors";
 import type { ParserSupport, SiteConnection } from "@/types/site-connection";
 
 export const runtime = "nodejs";
@@ -26,13 +23,6 @@ async function requireUser() {
   }
 
   return { response: null, user };
-}
-
-async function clearLoginSessionByConnectorId(
-  connectorId: string,
-  userId: string,
-) {
-  await deleteExternalSiteSession(userId, connectorId);
 }
 
 function normalizeUrl(rawValue: string) {
@@ -89,7 +79,6 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       siteName?: string;
       baseUrl?: string;
-      loginUrl?: string;
     };
 
     if (!body.siteName?.trim()) {
@@ -102,10 +91,6 @@ export async function POST(request: Request) {
     const { normalized: normalizedBaseUrl, domain } = parseDomain(
       body.baseUrl ?? "",
     );
-    const normalizedLoginUrl = body.loginUrl?.trim()
-      ? parseDomain(body.loginUrl).normalized
-      : normalizedBaseUrl;
-
     if (await findSiteConnectionByDomain(domain, user.id)) {
       return NextResponse.json(
         { message: "이미 등록된 사이트예요." },
@@ -117,7 +102,7 @@ export async function POST(request: Request) {
       id: randomUUID(),
       siteName: body.siteName.trim(),
       baseUrl: normalizedBaseUrl,
-      loginUrl: normalizedLoginUrl,
+      loginUrl: normalizedBaseUrl,
       domain,
       parserStatus: detectParserSupport(domain),
       createdAt: new Date().toISOString(),
@@ -154,13 +139,6 @@ export async function DELETE(request: Request) {
       { message: "삭제할 사이트 정보가 없어요." },
       { status: 400 },
     );
-  }
-
-  const site = await findSiteConnectionById(id, user.id);
-  const connector = site ? findSiteLoginConnectorByDomain(site.domain) : undefined;
-
-  if (connector) {
-    await clearLoginSessionByConnectorId(connector.id, user.id);
   }
 
   await deleteSiteConnection(id, user.id);

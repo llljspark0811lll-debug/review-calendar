@@ -21,6 +21,7 @@ export type AutomationJob = {
   status: AutomationJobStatus;
   input: {
     url: string;
+    companyPhone?: string;
   };
   result: {
     campaignId?: string;
@@ -77,10 +78,6 @@ type CampaignRow = Omit<
 type SiteConnectionRow = SiteConnection;
 type HolidayRow = Holiday;
 type HolidayOverrideAction = "add" | "hide" | "rename";
-type JsonValue = postgres.JSONValue;
-type ExternalSiteSessionRow = {
-  storageState: JsonValue;
-};
 type AutomationJobRow = {
   id: string;
   userId: string;
@@ -273,23 +270,6 @@ async function ensureSchema() {
         CREATE UNIQUE INDEX IF NOT EXISTS site_connections_user_domain_idx
         ON site_connections(user_id, domain)
         WHERE user_id IS NOT NULL
-      `;
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS external_site_sessions (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          connector_id TEXT NOT NULL,
-          storage_state JSONB NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          UNIQUE(user_id, connector_id)
-        )
-      `;
-
-      await sql`
-        CREATE INDEX IF NOT EXISTS external_site_sessions_user_id_idx
-        ON external_site_sessions(user_id)
       `;
 
       await sql`
@@ -761,57 +741,6 @@ export async function findSiteConnectionById(id: string, userId: string) {
   `;
 
   return rows[0];
-}
-
-export async function findExternalSiteSession(
-  userId: string,
-  connectorId: string,
-) {
-  await ensureSchema();
-  const sql = getSql();
-  const rows = await sql<ExternalSiteSessionRow[]>`
-    SELECT storage_state AS "storageState"
-    FROM external_site_sessions
-    WHERE user_id = ${userId} AND connector_id = ${connectorId}
-    LIMIT 1
-  `;
-
-  return rows[0]?.storageState;
-}
-
-export async function upsertExternalSiteSession(input: {
-  id: string;
-  userId: string;
-  connectorId: string;
-  storageState: JsonValue;
-}) {
-  await ensureSchema();
-  const sql = getSql();
-  const now = new Date().toISOString();
-
-  await sql`
-    INSERT INTO external_site_sessions (
-      id, user_id, connector_id, storage_state, created_at, updated_at
-    ) VALUES (
-      ${input.id}, ${input.userId}, ${input.connectorId}, ${sql.json(input.storageState)}, ${now}, ${now}
-    )
-    ON CONFLICT(user_id, connector_id) DO UPDATE SET
-      storage_state = EXCLUDED.storage_state,
-      updated_at = EXCLUDED.updated_at
-  `;
-}
-
-export async function deleteExternalSiteSession(
-  userId: string,
-  connectorId: string,
-) {
-  await ensureSchema();
-  const sql = getSql();
-
-  await sql`
-    DELETE FROM external_site_sessions
-    WHERE user_id = ${userId} AND connector_id = ${connectorId}
-  `;
 }
 
 function mapAutomationJob(row: AutomationJobRow): AutomationJob {

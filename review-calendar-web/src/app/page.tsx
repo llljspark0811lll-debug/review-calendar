@@ -1,12 +1,6 @@
 ﻿"use client";
 
 import { type FormEvent, useEffect, useMemo, useState, useTransition } from "react";
-import {
-  findSiteLoginConnectorByDomain,
-  siteLoginConnectors,
-  type SiteLoginConnector,
-  type SiteLoginConnectorId,
-} from "@/lib/site-login-connectors";
 import type { Campaign, CampaignStatus } from "@/types/campaign";
 import type { Holiday } from "@/types/holiday";
 import type { SiteConnection } from "@/types/site-connection";
@@ -20,7 +14,6 @@ const dashboardTabs = [
 ] as const;
 
 type DashboardTabId = (typeof dashboardTabs)[number]["id"];
-type LoginConnectionMap = Record<SiteLoginConnectorId, boolean>;
 type AppUser = {
   id: string;
   username: string;
@@ -286,20 +279,6 @@ function buildCheckpointSummary(campaigns: Campaign[], fallback: string) {
   return `${campaigns[0].title} 외 ${campaigns.length - 1}건`;
 }
 
-function createLoginConnectionMap(
-  valueOrEntries:
-    | boolean
-    | ReadonlyArray<readonly [SiteLoginConnectorId, boolean]> = false,
-) {
-  const entries = Array.isArray(valueOrEntries)
-    ? valueOrEntries
-    : siteLoginConnectors.map(
-        (connector) => [connector.id, valueOrEntries] as const,
-      );
-
-  return Object.fromEntries(entries) as LoginConnectionMap;
-}
-
 export default function Home() {
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -334,22 +313,16 @@ export default function Home() {
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [activeDateCell, setActiveDateCell] = useState<CalendarCell | null>(null);
   const [linkValue, setLinkValue] = useState("");
+  const [companyPhoneValue, setCompanyPhoneValue] = useState("");
   const [siteNameValue, setSiteNameValue] = useState("");
   const [siteUrlValue, setSiteUrlValue] = useState("");
-  const [siteLoginUrlValue, setSiteLoginUrlValue] = useState("");
   const [registerErrorMessage, setRegisterErrorMessage] = useState("");
   const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
   const [connectionHelperMessage, setConnectionHelperMessage] = useState("");
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [scheduleErrorMessage, setScheduleErrorMessage] = useState("");
   const [siteFormErrorMessage, setSiteFormErrorMessage] = useState("");
-  const [loginPendingSite, setLoginPendingSite] =
-    useState<SiteLoginConnectorId | null>(null);
   const [isBootstrapLoading, setIsBootstrapLoading] = useState(true);
-  const [isSessionLoading, setIsSessionLoading] = useState(true);
-  const [loginConnections, setLoginConnections] = useState<LoginConnectionMap>(
-    () => createLoginConnectionMap(false),
-  );
   const [holidaySyncEnabled, setHolidaySyncEnabled] = useState(false);
   const [isSchedulePending, setIsSchedulePending] = useState(false);
   const [isDeletePending, setIsDeletePending] = useState(false);
@@ -491,29 +464,7 @@ export default function Home() {
 
     return Array.from(years).sort((left, right) => left - right);
   })();
-  const connectedSitesCount = useMemo(
-    () =>
-      siteConnections.filter((site) => {
-        const connector = findSiteLoginConnectorByDomain(site.domain);
-
-        return connector ? loginConnections[connector.id] : false;
-      }).length,
-    [loginConnections, siteConnections],
-  );
-
-  async function loadLoginConnection(connector: SiteLoginConnector) {
-    const response = await fetch(connector.sessionPath);
-    const result = await readApiJson<{ connected?: boolean }>(
-      response,
-      "로그인 연동 상태를 확인하지 못했어요.",
-    );
-
-    if (!response.ok) {
-      throw new Error();
-    }
-
-    return Boolean(result.connected);
-  }
+  const registeredSitesCount = siteConnections.length;
 
   async function refreshBootstrap() {
     const response = await fetch("/api/bootstrap");
@@ -643,45 +594,6 @@ export default function Home() {
 
     let cancelled = false;
 
-    Promise.all(
-      siteLoginConnectors.map(async (connector) => {
-        try {
-          return [connector.id, await loadLoginConnection(connector)] as const;
-        } catch {
-          return [connector.id, false] as const;
-        }
-      }),
-    )
-      .then((entries) => {
-        if (cancelled) {
-          return;
-        }
-
-        setLoginConnections(createLoginConnectionMap(entries));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoginConnections(createLoginConnectionMap(false));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsSessionLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (!currentUser) {
-      return;
-    }
-
-    let cancelled = false;
-
     fetch(
       `/api/holidays?startDate=${visibleMonthRange.startDate.slice(0, 4)}-01-01&endDate=${visibleMonthRange.startDate.slice(0, 4)}-12-31`,
     )
@@ -742,7 +654,6 @@ export default function Home() {
       }
 
       setIsBootstrapLoading(true);
-      setIsSessionLoading(true);
       setCurrentUser(result.user);
       setAuthUsername("");
       setAuthEmail("");
@@ -839,18 +750,19 @@ export default function Home() {
     setCampaigns([]);
     setHolidays([]);
     setSiteConnections([]);
-    setLoginConnections(createLoginConnectionMap(false));
     setSelectedId(null);
   }
 
   function openRegisterModal() {
     setLinkValue("");
+    setCompanyPhoneValue("");
     setRegisterErrorMessage("");
     setIsRegisterModalOpen(true);
   }
 
   function closeRegisterModal() {
     setLinkValue("");
+    setCompanyPhoneValue("");
     setRegisterErrorMessage("");
     setIsRegisterModalOpen(false);
   }
@@ -860,18 +772,6 @@ export default function Home() {
     setConnectionHelperMessage("");
     setSiteFormErrorMessage("");
     setIsConnectionModalOpen(true);
-    setIsSessionLoading(true);
-    void Promise.all(
-      siteLoginConnectors.map(async (connector) => {
-        try {
-          return [connector.id, await loadLoginConnection(connector)] as const;
-        } catch {
-          return [connector.id, false] as const;
-        }
-      }),
-    )
-      .then((entries) => setLoginConnections(createLoginConnectionMap(entries)))
-      .finally(() => setIsSessionLoading(false));
   }
 
   function handleAddSite() {
@@ -887,7 +787,6 @@ export default function Home() {
           body: JSON.stringify({
             siteName: siteNameValue,
             baseUrl: siteUrlValue,
-            loginUrl: siteLoginUrlValue,
           }),
         });
 
@@ -907,11 +806,10 @@ export default function Home() {
         setSiteConnections((current) => [nextSite, ...current]);
         setSiteNameValue("");
         setSiteUrlValue("");
-        setSiteLoginUrlValue("");
 
         if (nextSite.parserStatus === "supported") {
           setConnectionHelperMessage(
-            "이 사이트는 자동 등록 파서가 준비돼 있어요. 로그인 연동을 진행하면 선정 링크 등록에 사용할 수 있어요.",
+            "이 사이트는 자동 등록 파서가 준비돼 있어요. 선정 링크와 업체 연락처를 입력하면 캘린더에 등록할 수 있어요.",
           );
         } else {
           setConnectionHelperMessage(
@@ -955,15 +853,6 @@ export default function Home() {
           throw new Error(result.message ?? "사이트 제거 중 문제가 생겼어요.");
         }
 
-        const connector = findSiteLoginConnectorByDomain(siteToRemove.domain);
-
-        if (connector) {
-          setLoginConnections((current) => ({
-            ...current,
-            [connector.id]: false,
-          }));
-        }
-
         setSiteConnections((current) =>
           current.filter((site) => site.id !== siteToRemove.id),
         );
@@ -989,7 +878,10 @@ export default function Home() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ url: linkValue.trim() }),
+          body: JSON.stringify({
+            url: linkValue.trim(),
+            companyPhone: companyPhoneValue.trim(),
+          }),
         });
 
         const result = await readApiJson<{
@@ -1360,45 +1252,6 @@ export default function Home() {
     })();
   }
 
-  async function handleSiteLogin(connector: SiteLoginConnector) {
-    setConnectionErrorMessage("");
-    setConnectionHelperMessage(connector.openingMessage);
-    setLoginPendingSite(connector.id);
-
-    try {
-      const response = await fetch(connector.loginPath, {
-        method: "POST",
-      });
-      const result = await readApiJson<{ message?: string }>(
-        response,
-        `${connector.displayName} 로그인 연동에 실패했어요.`,
-      );
-
-      if (!response.ok) {
-        throw new Error(result.message ?? `${connector.displayName} 로그인 연동에 실패했어요.`);
-      }
-
-      setConnectionHelperMessage(result.message ?? connector.successMessage);
-      setLoginConnections((current) => ({
-        ...current,
-        [connector.id]: true,
-      }));
-
-      const connected = await loadLoginConnection(connector);
-      setLoginConnections((current) => ({
-        ...current,
-        [connector.id]: connected,
-      }));
-    } catch (error) {
-      setConnectionErrorMessage(
-        error instanceof Error ? error.message : connector.errorMessage,
-      );
-      setConnectionHelperMessage("");
-    } finally {
-      setLoginPendingSite(null);
-    }
-  }
-
   if (isAuthLoading) {
     return <AuthLoadingScreen />;
   }
@@ -1479,10 +1332,10 @@ export default function Home() {
                     <div className="relative z-10 flex items-start justify-between gap-5">
                       <div className="min-w-0">
                         <span className="block font-display text-[38px] leading-none">
-                          사이트 연동
+                          사이트 관리
                         </span>
                         <span className="mt-5 block max-w-[220px] text-base leading-7 text-[#c97aa4]">
-                          체험단 사이트 로그인 상태를 연결하고 관리해요
+                          자주 쓰는 체험단 사이트를 등록해요
                         </span>
                       </div>
                       <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-[#fff3f8] text-[#cf5f97]">
@@ -1819,8 +1672,8 @@ export default function Home() {
                   text="text-[#8f5c14]"
                 />
                 <StatCard
-                  title="연동된 사이트"
-                  value={`${connectedSitesCount}`.padStart(2, "0")}
+                  title="등록 사이트"
+                  value={`${registeredSitesCount}`.padStart(2, "0")}
                   bg="bg-[#eee1ff]"
                   text="text-[#7044a0]"
                 />
@@ -1897,8 +1750,8 @@ export default function Home() {
                   선정된 체험단 링크 붙여넣기
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-                  선정된 상세 링크를 입력하면 체험단명, 체험 기간, 리뷰 마감일
-                  같은 정보를 자동으로 등록해요.
+                  선정된 상세 링크와 업체 연락처를 입력하면 체험단명, 체험 기간,
+                  리뷰 마감일 같은 정보를 자동으로 등록해요.
                 </p>
               </div>
               <button
@@ -1919,9 +1772,18 @@ export default function Home() {
                 placeholder="예) 선정된 체험단 상세 링크를 붙여넣어 주세요"
                 className="mt-3 w-full rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
               />
+              <label className="mt-4 block text-sm font-black text-[#b94a81]">
+                업체 연락처
+              </label>
+              <input
+                value={companyPhoneValue}
+                onChange={(event) => setCompanyPhoneValue(event.target.value)}
+                placeholder="예) 010-1234-5678 또는 매장 예약번호"
+                className="mt-3 w-full rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
+              />
               <div className="mt-3 rounded-[20px] bg-[#fff1f8] px-4 py-3 text-xs leading-6 text-[#9a6280]">
-                사이트 연동에서 로그인 연결을 먼저 완료해두면, 링크 등록 시 실제
-                체험단 정보를 바로 불러올 수 있어요.
+                업체 연락처는 체험단 사이트에서 확인한 예약번호를 직접 입력해 주세요.
+                나머지 정보는 선정 링크에서 자동으로 불러와요.
               </div>
               {registerErrorMessage ? (
                 <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
@@ -1955,14 +1817,14 @@ export default function Home() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
-                  사이트 연동 관리
+                  사이트 관리
                 </p>
                 <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
-                  체험단 사이트 로그인 연결
+                  체험단 사이트 등록
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-                  자주 사용하는 체험단 사이트를 미리 연동해두면 선정된 링크를
-                  등록할 때 상세 정보를 자동으로 불러올 수 있어요.
+                  자주 사용하는 체험단 사이트를 등록해두면 선정 링크를 등록할 때
+                  해당 사이트의 공개 정보를 자동으로 불러올 수 있어요.
                 </p>
               </div>
               <button
@@ -1985,7 +1847,7 @@ export default function Home() {
                       사이트별 자동 등록 파서가 준비된 곳은 선정 링크를 바로 불러올 수 있어요.
                     </p>
                   </div>
-                  <Badge tone="lavender">사용자 추가형 관리</Badge>
+                  <Badge tone="lavender">사용자 추가형 사이트</Badge>
                 </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -2011,17 +1873,6 @@ export default function Home() {
                       className="mt-2 w-full rounded-[18px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-3 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
                     />
                   </label>
-                  <label className="block sm:col-span-2">
-                    <span className="text-sm font-black text-[#b94a81]">
-                      로그인 페이지 주소
-                    </span>
-                    <input
-                      value={siteLoginUrlValue}
-                      onChange={(event) => setSiteLoginUrlValue(event.target.value)}
-                      placeholder="선택 입력, 비워두면 사이트 주소를 사용해요"
-                      className="mt-2 w-full rounded-[18px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-3 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
-                    />
-                  </label>
                 </div>
 
                 {siteFormErrorMessage ? (
@@ -2043,39 +1894,13 @@ export default function Home() {
               {siteConnections.length ? (
                 siteConnections.map((site) => {
                   const isSupportedSite = site.parserStatus === "supported";
-                  const loginConnector = findSiteLoginConnectorByDomain(site.domain);
-                  const isConnected = loginConnector
-                    ? loginConnections[loginConnector.id]
-                    : false;
-                  const isThisLoginPending = loginConnector
-                    ? loginPendingSite === loginConnector.id
-                    : false;
-                  const statusLabel = loginConnector
-                    ? isSessionLoading
-                      ? "상태 확인 중"
-                      : isConnected
-                        ? "연동 완료"
-                        : "연동 필요"
-                    : isSupportedSite
-                      ? "자동 등록 가능"
-                      : "파싱 준비 중";
-                  const statusTone = loginConnector
-                    ? isConnected
-                      ? "connected"
-                      : "pending"
-                    : isSupportedSite
-                      ? "pending"
-                      : "comingSoon";
-                  const description = loginConnector
-                    ? `${site.siteName} 선정 상세 링크 등록 시 체험 기간, 마감일, 연락처를 자동으로 불러와요.`
-                    : isSupportedSite
-                      ? "이 도메인의 자동 등록 파서가 준비돼 있어요. 선정 상세 링크를 등록하면 정보를 불러올 수 있어요."
-                      : "사이트는 등록됐지만, 이 도메인의 자동 로그인/상세 파싱은 아직 준비되지 않았어요.";
-                  const loginAction = loginConnector
-                    ? () => {
-                        void handleSiteLogin(loginConnector);
-                      }
-                    : undefined;
+                  const statusLabel = isSupportedSite
+                    ? "자동 등록 가능"
+                    : "파싱 준비 중";
+                  const statusTone = isSupportedSite ? "connected" : "comingSoon";
+                  const description = isSupportedSite
+                    ? "이 도메인의 자동 등록 파서가 준비돼 있어요. 선정 링크와 업체 연락처를 입력하면 정보를 불러올 수 있어요."
+                    : "사이트는 등록됐지만, 이 도메인의 상세 파싱은 아직 준비되지 않았어요.";
 
                   return (
                     <SiteConnectionCard
@@ -2088,19 +1913,6 @@ export default function Home() {
                       parserLabel={
                         isSupportedSite ? "자동 등록 지원" : "자동 등록 준비 중"
                       }
-                      actionLabel={
-                        loginConnector
-                          ? isThisLoginPending
-                            ? "로그인 완료 대기 중..."
-                            : isConnected
-                              ? "다시 연동하기"
-                              : "로그인 연동"
-                          : undefined
-                      }
-                      actionDisabled={
-                        loginConnector ? loginPendingSite !== null : undefined
-                      }
-                      onAction={loginAction}
                       onRemove={() => handleRequestRemoveSite(site)}
                     />
                   );
@@ -2173,11 +1985,6 @@ export default function Home() {
       {siteToRemove ? (
         <RemoveSiteConfirmModal
           site={siteToRemove}
-          hasLoginSession={(() => {
-            const connector = findSiteLoginConnectorByDomain(siteToRemove.domain);
-
-            return connector ? loginConnections[connector.id] : false;
-          })()}
           isPending={isSiteRemovePending}
           onClose={() => {
             if (!isSiteRemovePending) {
@@ -2263,7 +2070,7 @@ function AuthScreen({
             </p>
             <div className="mt-10 grid gap-3 text-sm font-black text-white/90">
               <div className="rounded-[24px] bg-white/14 px-4 py-3">캘린더 일정 관리</div>
-              <div className="rounded-[24px] bg-white/14 px-4 py-3">사이트 연동 관리</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">사이트 관리</div>
               <div className="rounded-[24px] bg-white/14 px-4 py-3">리뷰 마감 체크</div>
             </div>
           </div>
@@ -2765,11 +2572,7 @@ function CampaignDetailSection({
         <div className="mt-6 rounded-[34px] bg-[linear-gradient(180deg,rgba(255,242,248,0.95),rgba(255,232,243,0.88))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
           <div className="flex flex-wrap gap-2">
             <Badge>{selectedCampaign.site}</Badge>
-            <Badge tone={selectedCampaign.contactLocked ? "lavender" : "mint"}>
-              {selectedCampaign.contactLocked
-                ? "연락처는 로그인 연동 후 확인"
-                : "연락처 확인 가능"}
-            </Badge>
+            <Badge tone="mint">연락처 입력 완료</Badge>
           </div>
           <h3 className="mt-3 text-3xl font-black text-[#8f315f]">
             {selectedCampaign.title}
@@ -2797,7 +2600,7 @@ function CampaignDetailSection({
             />
             <DetailCard
               label="전화번호"
-              value={selectedCampaign.companyPhone ?? "로그인 연동 후 불러올 예정"}
+              value={selectedCampaign.companyPhone ?? "직접 입력 필요"}
             />
             <DetailCard
               label="확정 일정"
@@ -2831,9 +2634,6 @@ function SiteConnectionCard({
   statusLabel,
   statusTone,
   parserLabel,
-  actionLabel,
-  actionDisabled,
-  onAction,
   onRemove,
 }: {
   siteName: string;
@@ -2842,9 +2642,6 @@ function SiteConnectionCard({
   statusLabel: string;
   statusTone: "connected" | "pending" | "comingSoon";
   parserLabel: string;
-  actionLabel?: string;
-  actionDisabled?: boolean;
-  onAction?: () => void;
   onRemove: () => void;
 }) {
   const toneClass =
@@ -2875,15 +2672,6 @@ function SiteConnectionCard({
           <p className="mt-3 text-sm leading-6 text-[#8a5d75]">{description}</p>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-          {actionLabel && onAction ? (
-            <button
-              onClick={onAction}
-              disabled={actionDisabled}
-              className="rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {actionLabel}
-            </button>
-          ) : null}
           <button
             onClick={onRemove}
             className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c55a90] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
@@ -3250,13 +3038,11 @@ function DeleteCampaignConfirmModal({
 
 function RemoveSiteConfirmModal({
   site,
-  hasLoginSession,
   isPending,
   onClose,
   onConfirm,
 }: {
   site: SiteConnection;
-  hasLoginSession: boolean;
   isPending: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -3285,7 +3071,6 @@ function RemoveSiteConfirmModal({
         <div className="mt-5 rounded-[24px] border border-[#ffd4e7] bg-[#fff8fc] p-4">
           <div className="flex flex-wrap gap-2">
             <Badge>{site.parserStatus === "supported" ? "자동 등록 지원" : "준비 중"}</Badge>
-            {hasLoginSession ? <Badge tone="mint">로그인 연동 중</Badge> : null}
           </div>
           <h3 className="mt-3 text-2xl font-black text-[#8d315f]">
             {site.siteName}
@@ -3295,11 +3080,6 @@ function RemoveSiteConfirmModal({
             제거하면 이 사이트의 링크를 새로 등록할 수 없고, 다시 사용하려면 사이트를
             다시 추가해야 해요.
           </p>
-          {hasLoginSession ? (
-            <p className="mt-3 rounded-[18px] bg-[#fff0bf] px-4 py-3 text-sm font-bold leading-6 text-[#8b5e1c]">
-              저장된 로그인 연동도 함께 해제돼요.
-            </p>
-          ) : null}
         </div>
 
         <div className="mt-6 flex justify-end gap-3">

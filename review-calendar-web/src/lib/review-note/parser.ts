@@ -1,4 +1,3 @@
-import { getReviewNoteCookieHeader } from "@/lib/review-note/session";
 import type { ParsedCampaign } from "@/lib/parsers/types";
 
 type ReviewNoteCampaignResponse = {
@@ -9,10 +8,8 @@ type ReviewNoteCampaignResponse = {
   applyEndAt?: string;
   reviewEndAt?: string;
   extendedReviewEndAt?: string | null;
-  contact?: string | null;
   address1?: string | null;
   address2?: string | null;
-  url?: string | null;
   sort?: string | null;
   infPoint?: number | null;
   city?: string | null;
@@ -69,47 +66,36 @@ function buildAddress(data: ReviewNoteCampaignResponse) {
 }
 
 function buildMemo(data: ReviewNoteCampaignResponse) {
-  const parts = [
+  return [
     data.sort ? `유형: ${data.sort}` : "",
     data.city ? `지역: ${data.city}` : "",
     data.category?.title ? `카테고리: ${data.category.title}` : "",
-    data.contact
-      ? "업체 연락처 파싱 완료"
-      : "업체 연락처가 없거나 로그인 권한 밖일 수 있음",
-  ].filter(Boolean);
-
-  return parts.join(" / ");
+    "업체 연락처는 선정 페이지에서 확인 후 직접 입력한 값으로 저장돼요.",
+  ]
+    .filter(Boolean)
+    .join(" / ");
 }
 
 export async function parseReviewNoteCampaign(
   campaignId: string,
   href: string,
-  userId: string,
 ): Promise<ParsedCampaign> {
-  const cookieHeader = await getReviewNoteCookieHeader(userId);
-
-  if (!cookieHeader) {
-    throw new Error("리뷰노트 로그인이 먼저 필요해요.");
-  }
-
   const response = await fetch(
     `https://www.reviewnote.co.kr/api/campaign?id=${campaignId}`,
     {
       headers: {
-        cookie: cookieHeader,
         accept: "application/json, text/plain, */*",
-        "user-agent": "ReviewCalendar/1.0",
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
       },
       cache: "no-store",
     },
   );
 
-  if (response.status === 401) {
-    throw new Error("리뷰노트 로그인 세션이 만료됐어요. 다시 로그인해 주세요.");
-  }
-
   if (!response.ok) {
-    throw new Error("리뷰노트 체험단 정보를 불러오지 못했어요.");
+    throw new Error(
+      "리뷰노트 공개 정보를 불러오지 못했어요. 링크가 올바른지 확인해 주세요.",
+    );
   }
 
   const data = (await response.json()) as ReviewNoteCampaignResponse;
@@ -119,7 +105,6 @@ export async function parseReviewNoteCampaign(
   );
   const experienceEndDate = formatDateString(data.reviewEndAt);
   const address = buildAddress(data);
-  const phone = compactText(data.contact) || null;
 
   return {
     title: compactText(data.title) || `리뷰노트 체험단 #${campaignId}`,
@@ -136,11 +121,11 @@ export async function parseReviewNoteCampaign(
       compactText(data.user?.companyName) ||
       compactText(data.title) ||
       "리뷰노트 업체",
-    companyPhone: phone,
+    companyPhone: null,
     address: address || "주소 정보 없음",
     memo: buildMemo(data),
     sticker: "리뷰노트",
     accent: "from-[#ffa1cb] via-[#ffd0e4] to-[#fff0f7]",
-    contactLocked: !phone,
+    contactLocked: false,
   };
 }

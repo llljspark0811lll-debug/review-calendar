@@ -10,8 +10,8 @@ export const reviewNoteParser: CampaignParser = {
   canHandle(url) {
     return url.hostname.includes("reviewnote.co.kr");
   },
-  async parse(url, userId) {
+  async parse(url) {
     const campaignId = getCampaignId(url);
-    return parseReviewNoteCampaign(campaignId, url.href, userId);
+    return parseReviewNoteCampaign(campaignId, url.href);
   },
 };

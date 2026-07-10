@@ -48,20 +48,21 @@ export async function parseCampaignLink(
   rawUrl: string,
   userId: string,
 ): Promise<ParsedCampaign> {
+  void userId;
   let url: URL;
 
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new Error("?щ컮瑜?留곹겕 ?뺤떇???꾨땲?먯슂.");
+    throw new Error("올바른 링크 형식이 아니에요.");
   }
 
   const parserMatcher = findParserMatcher(url);
 
   if (!parserMatcher) {
-    throw new Error("?꾩쭅 ?먮룞 ?깅줉 ?뚯꽌媛 以鍮꾨릺吏 ?딆? ?ъ씠?몄삁??");
+    throw new Error("아직 자동 등록 파서가 준비되지 않은 사이트예요.");
   }
 
   const parser = await loadParser(parserMatcher.id);
-  return parser.parse(url, userId);
+  return parser.parse(url);
 }

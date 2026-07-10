@@ -38,6 +38,8 @@ async function processNextJob() {
     const parsed = await parseCampaignLink(job.input.url, job.userId);
     const campaign: Campaign = {
       ...parsed,
+      companyPhone: job.input.companyPhone?.trim() || parsed.companyPhone,
+      contactLocked: false,
       id: randomUUID(),
     };
 
