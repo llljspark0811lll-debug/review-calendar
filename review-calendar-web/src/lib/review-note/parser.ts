@@ -70,7 +70,7 @@ function buildMemo(data: ReviewNoteCampaignResponse) {
     data.sort ? `유형: ${data.sort}` : "",
     data.city ? `지역: ${data.city}` : "",
     data.category?.title ? `카테고리: ${data.category.title}` : "",
-    "업체 연락처는 선정 페이지에서 확인 후 직접 입력한 값으로 저장돼요.",
+    "업체 연락처는 선정 페이지에서 확인한 뒤 직접 입력한 값으로 저장됐어요.",
   ]
     .filter(Boolean)
     .join(" / ");
@@ -85,6 +85,7 @@ export async function parseReviewNoteCampaign(
     {
       headers: {
         accept: "application/json, text/plain, */*",
+        referer: href,
         "user-agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
       },
@@ -92,9 +93,15 @@ export async function parseReviewNoteCampaign(
     },
   );
 
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      "리뷰노트는 로그인 없이 상세 정보를 제공하지 않아 자동 등록할 수 없어요. 현재는 강남맛집처럼 공개 상세 정보가 열려 있는 링크만 자동 등록할 수 있어요.",
+    );
+  }
+
   if (!response.ok) {
     throw new Error(
-      "리뷰노트 공개 정보를 불러오지 못했어요. 링크가 올바른지 확인해 주세요.",
+      "리뷰노트 상세 정보를 불러오지 못했어요. 링크가 올바른지 확인해 주세요.",
     );
   }
 
