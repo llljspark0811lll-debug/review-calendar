@@ -779,7 +779,7 @@ export default function Home() {
     }
   }
 
-  function handlePasteCapture(event: ClipboardEvent<HTMLDivElement>) {
+  function handlePasteCapture(event: ClipboardEvent<HTMLTextAreaElement>) {
     event.preventDefault();
     const captured =
       event.clipboardData.getData("text/html") || event.clipboardData.getData("text/plain");
@@ -1696,15 +1696,13 @@ export default function Home() {
                 <li>4. 아래에 붙여넣기 (Ctrl+V)</li>
               </ol>
 
-              <div
-                contentEditable
-                suppressContentEditableWarning
+              <textarea
+                value={pasteContent ? "붙여넣음 ✓" : ""}
+                onChange={() => {}}
                 onPaste={handlePasteCapture}
-                data-placeholder="여기를 클릭하고 Ctrl+V로 붙여넣어 주세요"
-                className="empty:before:content-[attr(data-placeholder)] mt-4 min-h-[96px] w-full whitespace-pre-wrap rounded-[20px] border border-dashed border-[#ffb8d8] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition empty:before:text-[#c99bb4] focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
-              >
-                {pasteContent ? "붙여넣음 ✓" : ""}
-              </div>
+                placeholder="여기를 클릭하고 Ctrl+V로 붙여넣어 주세요"
+                className="mt-4 min-h-[96px] w-full resize-none rounded-[20px] border border-dashed border-[#ffb8d8] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition placeholder:text-[#c99bb4] focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
+              />
 
               {isParsingPreview ? (
                 <p className="mt-3 rounded-[18px] bg-[#fff1f8] px-4 py-3 text-sm font-bold text-[#b3688e]">
