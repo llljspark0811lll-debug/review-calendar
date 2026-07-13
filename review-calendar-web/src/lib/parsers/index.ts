@@ -13,6 +13,12 @@ const parserMatchers = [
       return url.hostname.replace(/^www\./, "") === "xn--939au0g4vj8sq.net";
     },
   },
+  {
+    id: "dailyview",
+    canHandle(url: URL) {
+      return url.hostname.replace(/^www\./, "") === "dailyview.kr";
+    },
+  },
 ] as const;
 
 function findParserMatcher(url: URL) {
@@ -25,6 +31,11 @@ async function loadParser(
   if (parserId === "reviewnote") {
     const { reviewNoteParser } = await import("@/lib/parsers/review-note");
     return reviewNoteParser;
+  }
+
+  if (parserId === "dailyview") {
+    const { dailyviewParser } = await import("@/lib/parsers/dailyview");
+    return dailyviewParser;
   }
 
   const { gangnamParser } = await import("@/lib/parsers/gangnam");
@@ -52,4 +63,44 @@ export async function parseCampaignLink(
 
   const parser = await loadParser(parserMatcher.id);
   return parser.parse(url);
+}
+
+const contentSiteSignatures = [
+  { id: "reviewnote", pattern: /reviewnote\.co\.kr|리뷰노트/i },
+  { id: "dailyview", pattern: /dailyview\.kr|데일리뷰/i },
+  { id: "gangnam", pattern: /xn--939au0g4vj8sq\.net|강남맛집/i },
+] as const;
+
+function detectParserIdFromContent(content: string) {
+  return contentSiteSignatures.find((signature) => signature.pattern.test(content))?.id ?? null;
+}
+
+function looksLikeBareUrl(value: string) {
+  return /^https?:\/\/\S+$/.test(value) && !/[\n\r]/.test(value);
+}
+
+export async function parseCampaignContent(
+  rawContent: string,
+  userId: string,
+): Promise<ParsedCampaign> {
+  const trimmed = rawContent.trim();
+
+  if (!trimmed) {
+    throw new Error("붙여넣은 내용이 비어 있어요.");
+  }
+
+  if (looksLikeBareUrl(trimmed)) {
+    return parseCampaignLink(trimmed, userId);
+  }
+
+  const parserId = detectParserIdFromContent(trimmed);
+
+  if (!parserId) {
+    throw new Error(
+      "지원하는 체험단 사이트 페이지를 찾지 못했어요. 선정된 체험단 상세 페이지에서 전체 복사(Ctrl+A → Ctrl+C)해서 다시 붙여넣어 주세요.",
+    );
+  }
+
+  const parser = await loadParser(parserId);
+  return parser.parseContent(trimmed);
 }

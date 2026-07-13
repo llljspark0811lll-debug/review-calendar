@@ -5,4 +5,5 @@ export type ParsedCampaign = Omit<Campaign, "id">;
 export interface CampaignParser {
   canHandle(url: URL): boolean;
   parse(url: URL): Promise<ParsedCampaign>;
+  parseContent(html: string): ParsedCampaign;
 }

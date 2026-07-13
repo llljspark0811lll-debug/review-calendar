@@ -1,4 +1,4 @@
-import { parseGangnamCampaign } from "@/lib/gangnam/parser";
+import { parseGangnamCampaign, parseGangnamCampaignHtml } from "@/lib/gangnam/parser";
 import type { CampaignParser } from "@/lib/parsers/types";
 
 function getCampaignId(url: URL) {
@@ -17,5 +17,8 @@ export const gangnamParser: CampaignParser = {
     }
 
     return parseGangnamCampaign(campaignId, url.href);
+  },
+  parseContent(html) {
+    return parseGangnamCampaignHtml(html, "");
   },
 };

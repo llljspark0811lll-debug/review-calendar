@@ -1,4 +1,4 @@
-import { parseReviewNoteCampaign } from "@/lib/review-note/parser";
+import { parseReviewNoteCampaign, parseReviewNoteCampaignHtml } from "@/lib/review-note/parser";
 import type { CampaignParser } from "@/lib/parsers/types";
 
 function getCampaignId(url: URL) {
@@ -13,5 +13,8 @@ export const reviewNoteParser: CampaignParser = {
   async parse(url) {
     const campaignId = getCampaignId(url);
     return parseReviewNoteCampaign(campaignId, url.href);
+  },
+  parseContent(html) {
+    return parseReviewNoteCampaignHtml(html, "");
   },
 };

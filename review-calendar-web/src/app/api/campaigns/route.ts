@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { insertCampaign } from "@/lib/db";
-import { parseCampaignLink } from "@/lib/parsers";
+import { parseCampaignContent } from "@/lib/parsers";
 import type { Campaign } from "@/types/campaign";
 
 export const runtime = "nodejs";
@@ -16,15 +16,15 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as {
-      url?: string;
+      content?: string;
       companyPhone?: string;
     };
-    const url = body.url?.trim();
+    const content = body.content?.trim();
     const companyPhone = body.companyPhone?.trim();
 
-    if (!url) {
+    if (!content) {
       return NextResponse.json(
-        { message: "선정 상세 링크를 입력해 주세요." },
+        { message: "선정된 체험단 링크 또는 페이지 내용을 입력해 주세요." },
         { status: 400 },
       );
     }
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const parsed = await parseCampaignLink(url, user.id);
+    const parsed = await parseCampaignContent(content, user.id);
     const campaign: Campaign = {
       ...parsed,
       id: randomUUID(),

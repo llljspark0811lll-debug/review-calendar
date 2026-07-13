@@ -1,6 +1,13 @@
 ﻿"use client";
 
-import { type FormEvent, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  type ClipboardEvent,
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import type { Campaign, CampaignStatus } from "@/types/campaign";
 import type { Holiday } from "@/types/holiday";
 
@@ -21,6 +28,7 @@ type AppUser = {
   createdAt: string;
 };
 type AuthMode = "login" | "register";
+type ParsedCampaignPreview = Omit<Campaign, "id" | "companyPhone" | "contactLocked">;
 
 type CheckpointTone = "pink" | "yellow" | "lavender";
 
@@ -105,6 +113,16 @@ function formatDateTime(dateString: string | null) {
 
 function formatIsoDate(year: number, month: number, day: number) {
   return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
+}
+
+function formatShortDate(iso: string) {
+  const [, month, day] = iso.split("-");
+
+  if (!month || !day) {
+    return iso;
+  }
+
+  return `${Number(month)}.${Number(day)}`;
 }
 
 function getMonthRange(year: number, month: number) {
@@ -300,9 +318,11 @@ export default function Home() {
     useState<CheckpointCardData["id"] | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [activeDateCell, setActiveDateCell] = useState<CalendarCell | null>(null);
-  const [linkValue, setLinkValue] = useState("");
+  const [pasteContent, setPasteContent] = useState("");
   const [companyPhoneValue, setCompanyPhoneValue] = useState("");
   const [registerErrorMessage, setRegisterErrorMessage] = useState("");
+  const [parsePreview, setParsePreview] = useState<ParsedCampaignPreview | null>(null);
+  const [isParsingPreview, setIsParsingPreview] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [scheduleErrorMessage, setScheduleErrorMessage] = useState("");
   const [isBootstrapLoading, setIsBootstrapLoading] = useState(true);
@@ -703,17 +723,67 @@ export default function Home() {
   }
 
   function openRegisterModal() {
-    setLinkValue("");
+    setPasteContent("");
     setCompanyPhoneValue("");
     setRegisterErrorMessage("");
+    setParsePreview(null);
+    setIsParsingPreview(false);
     setIsRegisterModalOpen(true);
   }
 
   function closeRegisterModal() {
-    setLinkValue("");
+    setPasteContent("");
     setCompanyPhoneValue("");
     setRegisterErrorMessage("");
+    setParsePreview(null);
+    setIsParsingPreview(false);
     setIsRegisterModalOpen(false);
+  }
+
+  async function requestParsePreview(content: string) {
+    setRegisterErrorMessage("");
+    setParsePreview(null);
+    setIsParsingPreview(true);
+
+    try {
+      const response = await fetch("/api/parse-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      const result = await readApiJson<ParsedCampaignPreview & { message?: string }>(
+        response,
+        "체험단 정보를 확인하지 못했어요.",
+      );
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "체험단 정보를 확인하지 못했어요.");
+      }
+
+      setParsePreview(result);
+    } catch (error) {
+      setRegisterErrorMessage(
+        error instanceof Error ? error.message : "체험단 정보를 확인하지 못했어요.",
+      );
+    } finally {
+      setIsParsingPreview(false);
+    }
+  }
+
+  function handlePasteCapture(event: ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const captured =
+      event.clipboardData.getData("text/html") || event.clipboardData.getData("text/plain");
+
+    if (!captured.trim()) {
+      return;
+    }
+
+    setPasteContent(captured);
+    void requestParsePreview(captured);
   }
 
   function handleRegisterLink() {
@@ -727,7 +797,7 @@ export default function Home() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            url: linkValue.trim(),
+            content: pasteContent,
             companyPhone: companyPhoneValue.trim(),
           }),
         });
@@ -750,7 +820,7 @@ export default function Home() {
         closeRegisterModal();
       } catch (error) {
         setRegisterErrorMessage(
-          error instanceof Error ? error.message : "링크 등록 중 문제가 생겼어요.",
+          error instanceof Error ? error.message : "체험단 등록 중 문제가 생겼어요.",
         );
       }
     });
@@ -1569,14 +1639,14 @@ export default function Home() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
-                  링크 자동 등록
+                  체험단 등록하기
                 </p>
                 <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
-                  선정된 체험단 링크 붙여넣기
+                  선정된 체험단 페이지 붙여넣기
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-                  선정된 상세 링크와 업체 연락처를 입력하면 체험단명, 체험 기간,
-                  리뷰 마감일 같은 정보를 자동으로 등록해요.
+                  선정된 체험단 페이지를 열고 전체 복사해서 붙여넣으면 체험단명,
+                  체험 기간, 리뷰 마감일 같은 정보를 자동으로 채워줘요.
                 </p>
               </div>
               <button
@@ -1588,15 +1658,58 @@ export default function Home() {
             </div>
 
             <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
-              <label className="block text-sm font-black text-[#b94a81]">
-                체험단 선정 링크
-              </label>
-              <input
-                value={linkValue}
-                onChange={(event) => setLinkValue(event.target.value)}
-                placeholder="예) 선정된 체험단 상세 링크를 붙여넣어 주세요"
-                className="mt-3 w-full rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
-              />
+              <ol className="grid gap-1 text-xs font-bold text-[#b3688e]">
+                <li>1. 선정된 체험단 페이지 열기</li>
+                <li>2. 페이지 전체 선택 (Ctrl+A)</li>
+                <li>3. 복사 (Ctrl+C)</li>
+                <li>4. 아래에 붙여넣기 (Ctrl+V)</li>
+              </ol>
+
+              <div
+                contentEditable
+                suppressContentEditableWarning
+                onPaste={handlePasteCapture}
+                data-placeholder="여기를 클릭하고 Ctrl+V로 붙여넣어 주세요"
+                className="empty:before:content-[attr(data-placeholder)] mt-4 min-h-[96px] w-full whitespace-pre-wrap rounded-[20px] border border-dashed border-[#ffb8d8] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition empty:before:text-[#c99bb4] focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
+              >
+                {pasteContent ? "붙여넣음 ✓" : ""}
+              </div>
+
+              {isParsingPreview ? (
+                <p className="mt-3 rounded-[18px] bg-[#fff1f8] px-4 py-3 text-sm font-bold text-[#b3688e]">
+                  체험단 정보를 확인하고 있어요...
+                </p>
+              ) : null}
+
+              {parsePreview ? (
+                <div className="mt-3 rounded-[22px] border border-[#ffd3e6] bg-[#fff8fc] p-4">
+                  <p className="inline-block rounded-full bg-[#ffe1ef] px-3 py-1 text-xs font-black text-[#b3346c]">
+                    {parsePreview.site} 인식 완료 ✓
+                  </p>
+                  <p className="mt-2 text-base font-black text-[#7f355b]">
+                    {parsePreview.title}
+                  </p>
+                  <p className="mt-1 text-sm text-[#8a5d75]">{parsePreview.reward}</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#8a5d75]">
+                    <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                      <p className="font-bold text-[#b3688e]">체험 기간</p>
+                      <p className="mt-1">
+                        {formatShortDate(parsePreview.experienceStartDate)} ~{" "}
+                        {formatShortDate(parsePreview.experienceEndDate)}
+                      </p>
+                    </div>
+                    <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                      <p className="font-bold text-[#b3688e]">리뷰 마감</p>
+                      <p className="mt-1">{formatShortDate(parsePreview.reviewDeadline)}</p>
+                    </div>
+                    <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                      <p className="font-bold text-[#b3688e]">방문 주소</p>
+                      <p className="mt-1 truncate">{parsePreview.address}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <label className="mt-4 block text-sm font-black text-[#b94a81]">
                 업체 연락처
               </label>
@@ -1608,7 +1721,7 @@ export default function Home() {
               />
               <div className="mt-3 rounded-[20px] bg-[#fff1f8] px-4 py-3 text-xs leading-6 text-[#9a6280]">
                 업체 연락처는 체험단 사이트에서 확인한 예약번호를 직접 입력해 주세요.
-                나머지 정보는 선정 링크에서 자동으로 불러와요.
+                나머지 정보는 붙여넣은 페이지에서 자동으로 불러와요.
               </div>
               {registerErrorMessage ? (
                 <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
@@ -1626,10 +1739,10 @@ export default function Home() {
               </button>
               <button
                 onClick={handleRegisterLink}
-                disabled={isPending}
+                disabled={isPending || !parsePreview || !companyPhoneValue.trim()}
                 className="min-w-[160px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isPending ? "자동 등록 중..." : "자동 등록하기"}
+                {isPending ? "등록 중..." : "등록하기"}
               </button>
             </div>
           </div>
