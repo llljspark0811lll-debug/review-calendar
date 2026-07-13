@@ -1666,7 +1666,7 @@ export default function Home() {
 
       {isRegisterModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+          <div className="max-h-[min(88vh,980px)] w-full max-w-2xl overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
@@ -2672,7 +2672,7 @@ function CheckpointDetailModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+      <div className="max-h-[min(88vh,980px)] w-full max-w-2xl overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
@@ -2753,7 +2753,7 @@ function DeleteCampaignConfirmModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+      <div className="max-h-[min(88vh,980px)] w-full max-w-lg overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
