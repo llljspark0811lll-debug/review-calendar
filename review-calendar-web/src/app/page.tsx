@@ -2528,8 +2528,8 @@ function DatePickModal({
                     key={campaign.id}
                     className="rounded-[24px] border border-[#ffd4e7] bg-[#fff8fc] p-4"
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
                         <div className="flex flex-wrap gap-2">
                           <Badge>{campaign.site}</Badge>
                           <Badge tone="yellow">체험 가능</Badge>
