@@ -20,6 +20,7 @@ npm run lint
 - 상태 관리는 별도 라이브러리 없이 React state(`useState`/`useEffect`)로 처리하고, 서버와는 `fetch`로 직접 통신한다. 전역 상태 라이브러리, 클라이언트 캐싱 레이어(React Query 등)는 없다.
 - DB 접근은 `src/lib/db.ts` 한 파일에 집중되어 있고, `postgres` 패키지로 원시 SQL을 실행한다. ORM은 쓰지 않는다.
 - 스키마 마이그레이션은 별도 마이그레이션 도구 없이 `db.ts` 내부에서 앱 부팅 시 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 형태로 지연 적용된다(`__reviewCalendarSchemaReady` 전역 캐시로 프로세스당 1회만 실행).
+- DB는 Supabase Postgres(서울 리전)를 쓴다. **`DATABASE_URL`은 반드시 Connection Pooler 주소(`aws-*.pooler.supabase.com:6543`)를 써야 한다** — Direct connection 호스트(`db.*.supabase.co`)는 IPv6 전용 A/AAAA 레코드만 갖고 있어, 개발 환경 네트워크에 따라 `ENOTFOUND`로 아예 연결이 안 될 수 있다(2026-07-14 Neon→Supabase 이전 중 확인). Neon을 쓰던 시절엔 무료 티어 auto-suspend로 인한 콜드 스타트(최초 쿼리 800ms+)가 체감 로딩 지연의 원인이었는데, Supabase 무료 티어는 상시 기동(1주일 미사용 시에만 프로젝트 전체 일시정지)이라 이 문제가 사실상 사라졌다.
 
 ### 디렉터리 구조
 
@@ -35,20 +36,19 @@ src/
       campaigns/       # 체험단 CRUD, [id]/schedule, [id]/status
       holidays/        # 공휴일 조회
       parse-link/      # 붙여넣은 내용(링크 또는 페이지 전체) → 체험단 미리보기 파싱
-      gangnam/ reviewnote/ site-connections/ automation-jobs/   # 빈 디렉터리(사용 안 함, 정리 대상)
   lib/
     auth.ts            # 세션/비밀번호 해시
     db.ts              # DB 연결, 스키마 부트스트랩, 전체 쿼리
     holidays.ts         # 공휴일 API 동기화
     parsers/            # 도메인 → 파서 라우팅 (index.ts, types.ts, gangnam.ts, review-note.ts, dailyview.ts)
     gangnam/parser.ts    # 강남맛집 실제 파싱 로직
-    review-note/parser.ts # 리뷰노트 실제 파싱 로직 (현재 사이트 정책상 상시 실패)
+    review-note/parser.ts # 리뷰노트 실제 파싱 로직 (붙여넣기 경로로 정상 동작)
     dailyview/parser.ts   # 데일리뷰 실제 파싱 로직
   types/
     campaign.ts, holiday.ts
 ```
 
-주의: `src/app/api/{gangnam,reviewnote,site-connections,automation-jobs}`는 현재 빈 디렉터리다. 과거 구조의 잔재로 보이며, 사용자 확인 없이 임의로 지우지 않는다.
+`src/app/api/{gangnam,reviewnote,site-connections,automation-jobs}`, `scripts/` 등 과거 구조의 빈 디렉터리와 `db.ts`의 미사용 함수(`closeDb`, `findUserById`, `insertHolidayOverride`)는 2026-07-14에 정리 완료했다.
 
 ### 인증 (`src/lib/auth.ts`)
 
@@ -63,9 +63,10 @@ src/
 - `CampaignParser` 인터페이스는 `canHandle`/`parse`(URL 기반 fetch) 외에 `parseContent`(순수 HTML 문자열 파싱, 네트워크 없음)를 필수로 구현한다. 세 어댑터(`lib/parsers/{gangnam,dailyview,review-note}.ts`) 모두 두 경로를 지원한다.
 - 각 사이트의 실제 파싱 로직(`lib/{gangnam,dailyview,review-note}/parser.ts`)은 `parseXxxCampaignHtml(html, href)` 순수 함수로 분리돼 있고, fetch 기반 함수(`parseXxxCampaign(id, href)`)는 이 순수 함수를 감싸는 얇은 래퍼다. 새 사이트를 추가하려면: (1) `lib/<site>/parser.ts`에 `parseXxxCampaignHtml` 구현 (2) 필요하면 fetch 래퍼도 추가 (3) `lib/parsers/<site>.ts` 어댑터에 `canHandle`/`parse`/`parseContent` 연결 (4) `lib/parsers/index.ts`의 `parserMatchers`와 `contentSiteSignatures`에 등록.
 - 지원 도메인/브랜드: `reviewnote.co.kr`/리뷰노트, `강남맛집.net`(퓨니코드 `xn--939au0g4vj8sq.net`), `dailyview.kr`/데일리뷰.
-- **리뷰노트는 링크 fetch로는 여전히 불가능하다.** `GET /api/campaign`이 401을 반환하고, `review_information.php` 같은 개인 페이지는 비로그인 시 `alert('로그인하셔야 이용가능합니다')` + 로그인 리다이렉트만 내려온다(본문 자체가 없음, 2026-07-13 재확인). 대신 사용자가 로그인한 브라우저에서 페이지를 통째로 복사해 붙여넣는 `parseReviewNoteCampaignHtml`로 지원한다. 이 함수는 (1) HTML을 줄 단위 텍스트로 변환해 "제공서비스/물품"/"방문 주소"/"방문 및 예약 안내" 라벨 다음 값을 추출하고 (2) 캘린더는 FullCalendar의 `data-date="YYYY-MM-DD"` 속성과 `fc-event-start`/`fc-event-end` 클래스를 이용해 "체험&리뷰"(체험 기간), "마감"(리뷰 마감일) 이벤트의 정확한 날짜 범위를 계산한다 — 실제 캠페인 2건의 개발자도구 마크업으로 검증 완료. 업체 연락처는 페이지에 있어도 자동 추출하지 않고 항상 수동 입력을 유지한다(AGENTS.md 원칙).
-- 강남맛집 파서(`lib/gangnam/parser.ts`)는 과거 `rejectUnauthorized:false` + 하드코딩 fallback IP로 우회하던 커스텀 http/https 클라이언트였으나, 실제로는 표준 `fetch()`로 인증서 검증을 켠 채 정상 접속됨을 확인하고 2026-07-11에 표준 `fetch()` 기반으로 교체함(MITM 위험 제거). 모집인원(`capacity`) 파싱도 `신청<em id="ask_count">` 정규식이 실제 마크업 `신청자 <em id="ask_count">`와 어긋나 항상 실패하던 것을 수정함 — 실제 캠페인 6건 재현 테스트로 확인.
-- 데일리뷰(`lib/dailyview/parser.ts`)는 2026-07-13에 신규 추가한 자동 파서다. 캠페인 상세 페이지가 서버에서 완전히 렌더링돼 있어(`<div class="itname">` 제목, `<div class="it_cp_reward_cut">` 제공내역, `신청 N / 모집 N` 모집인원, `리뷰 등록기간 MM.DD(요일)~MM.DD(요일)` 기간) 강남맛집과 동일한 정규식 스크래핑 방식으로 구현. 실제 캠페인 6건(수원·평택·부산 3곳·서울) 재현 테스트로 검증 완료. 다만 데일리뷰도 선정 후 개인 페이지(`review_information.php?rv_id=`)는 리뷰노트와 동일하게 로그인 벽이 있어, 그 경우엔 붙여넣기 경로로만 등록 가능하다. 업체 주소는 페이지에 텍스트로 없고 카카오맵 좌표(`lat`/`lng`)만 있어 리버스 지오코딩 없이는 못 채우므로 강남맛집과 동일하게 "주소 확인 필요" 기본값 사용.
+- **리뷰노트는 링크 fetch로는 여전히 불가능하다.** `GET /api/campaign`이 401을 반환하고, `review_information.php` 같은 개인 페이지는 비로그인 시 `alert('로그인하셔야 이용가능합니다')` + 로그인 리다이렉트만 내려온다(본문 자체가 없음). 대신 사용자가 로그인한 브라우저에서 페이지를 통째로 복사해 붙여넣는 `parseReviewNoteCampaignHtml`로 지원한다. 이 함수는 (1) HTML을 줄 단위 텍스트로 변환해 "제공서비스/물품"/"방문 주소" 라벨 다음 값을 추출하고 (2) "방문 및 예약 안내"+"키워드 정보"+"체험단 미션" 세 섹션을 정리해 상세 내용(`memo`)으로 합치며(연락처/전화번호/복사 버튼 텍스트는 필터링, 키워드는 `|`로 구분) (3) 캘린더는 FullCalendar(v6, `fc-daygrid-event-harness`) 구조를 분석해 "체험&리뷰"(체험 기간), "마감"(리뷰 마감일) 이벤트의 날짜 범위를 계산한다 — 여러 날에 걸친 이벤트는 시작 주(週)의 셀에만 렌더링되고 나머지 폭은 CSS `right` 픽셀 오프셋으로만 표현되므로, 같은 이벤트의 주 전체를 가로지르는 조각으로 컬럼 너비를 역산한 뒤 종료 조각의 폭을 일수로 환산한다. 실제 캠페인 마크업으로 검증 완료. 업체 연락처는 페이지에 있어도 자동 추출하지 않고 항상 수동 입력을 유지한다(AGENTS.md 원칙).
+- 강남맛집 파서(`lib/gangnam/parser.ts`)는 표준 `fetch()` 기반이며, 공개 상세 페이지(`<dt>/<dd>` 목록)와 로그인 후 "선정된 캠페인" 개인 페이지(`가이드라인`/`키워드`/`지역` 등 다른 라벨 구성) 둘 다 지원한다. 개인 페이지에서는 "가이드라인" + "키워드"(연락처/전화번호/복사 버튼 제외, `|` 구분)를 상세 내용(`memo`)으로 합친다("리뷰 시 주의사항"은 모든 캠페인에 공통으로 붙는 상투적 문구라 제외). 주소는 "지역" dt/dd 값에서 지역명+지번만 추출.
+- 데일리뷰(`lib/dailyview/parser.ts`)는 공개 상세 페이지(`review_campaign.php`, `<div class="itname">` 등 카드형 마크업)와 로그인 후 개인 페이지(`review_information.php?rv_id=`, "업체명/제공내역/주소/체험 및 리뷰기간/방문 및 예약안내" 라벨-값 텍스트) 둘 다 지원한다. `parseDailyviewCampaignHtml`이 마크업에 `<div class="itname">`가 있는지로 두 경로를 자동 분기한다. 개인 페이지는 기간이 이미 `YYYY-MM-DD ~ YYYY-MM-DD` 형식이라 연도 추정이 필요 없다.
+- **브라우저 Ctrl+C로 복사한 HTML은 모든 태그에 `style="..."` 등 속성이 주입된다.** 세 파서 모두 이 때문에 속성 없는 태그만 매칭하는 정규식(`<p class="tit">`, `<br>` 등)이 실패하는 버그를 겪었다 — 새 사이트를 추가하거나 파서를 고칠 때는 태그 매칭 정규식에 항상 `[^>]*`로 속성을 허용해야 한다.
 
 ### 데이터 모델 (`src/types/campaign.ts`, `db.ts`)
 
@@ -77,9 +78,8 @@ src/
 ### 알려진 기술 부채 / 개선 여지
 
 - `src/app/page.tsx`가 약 2,700줄짜리 단일 컴포넌트다. 캘린더 렌더링, 탭별 리스트, 등록 폼, 팝업, 인증 폼이 전부 한 파일에 있어 변경 시 영향 범위 파악이 어렵고 diff가 커지기 쉽다. 기능별 컴포넌트 분리(캘린더, 탭, 모달, 인증)를 고려할 만하다.
-- 테스트 코드가 없다(unit/e2e 전무). `scripts/` 디렉터리도 비어 있다.
-- 지원 파서가 2개 사이트(리뷰노트, 강남맛집)뿐이라 체험단 사이트가 늘어날수록 `src/app/api/parse-link` 흐름과 파서 등록 절차가 반복 작업이 된다.
-- `src/app/api/{gangnam,reviewnote,site-connections,automation-jobs}` 빈 디렉터리는 정리 필요(단, 임의 삭제 금지 — 사용자 확인 후).
+- 테스트 코드가 없다(unit/e2e 전무).
+- 지원 파서가 3개 사이트(리뷰노트, 강남맛집, 데일리뷰)뿐이라 체험단 사이트가 늘어날수록 `src/app/api/parse-link` 흐름과 파서 등록 절차가 반복 작업이 된다.
 - 마이그레이션이 코드 내 지연 실행 방식이라, 스키마 변경 이력을 별도로 추적하기 어렵다(버전 관리된 마이그레이션 파일 없음).
 
 ## 문서 관리

@@ -1868,8 +1868,8 @@ function AuthScreen({
             <p className="font-display text-5xl leading-none sm:text-6xl">
               리뷰캘린더
             </p>
-            <p className="mt-6 max-w-sm text-lg font-bold leading-8 text-white/92">
-              선정 체험단과 리뷰 마감일을 계정 안에서 안전하게 관리하세요.
+            <p className="mt-6 whitespace-nowrap text-base font-bold leading-8 text-white/92">
+              선정 체험단과 리뷰 마감일을 계정 안에서 편리하게 관리하세요.
             </p>
             <div className="mt-10 grid gap-3 text-sm font-black text-white/90">
               <div className="rounded-[24px] bg-white/14 px-4 py-3">캘린더 일정 관리</div>
@@ -2392,7 +2392,7 @@ function CampaignDetailSection({
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <DetailCard label="제공 내역" value={selectedCampaign.reward} />
-            <DetailCard label="가능 인원" value={selectedCampaign.capacity} />
+            <DetailCard label="주소" value={selectedCampaign.address} />
             <DetailCard
               label="체험 기간"
               value={`${selectedCampaign.experienceStartDate} ~ ${selectedCampaign.experienceEndDate}`}
@@ -2413,10 +2413,10 @@ function CampaignDetailSection({
 
           <div className="mt-3 rounded-[24px] border border-white/70 bg-white/85 px-4 py-3 shadow-[0_10px_18px_rgba(255,207,229,0.18)]">
             <p className="text-xs font-black tracking-[0.12em] text-[#d85f98]">
-              주소
+              상세 내용
             </p>
-            <p className="mt-2 text-sm font-bold text-[#7b4b66]">
-              {selectedCampaign.address}
+            <p className="mt-2 whitespace-pre-line text-sm font-bold leading-6 text-[#7b4b66]">
+              {selectedCampaign.memo}
             </p>
           </div>
         </div>

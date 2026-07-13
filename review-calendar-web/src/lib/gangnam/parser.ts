@@ -27,6 +27,29 @@ function decodeHtmlAttribute(input: string | undefined | null) {
   return compactText(input);
 }
 
+// compactText와 달리 줄바꿈(<br>, </p>, </li>)은 \n으로 보존한다.
+// 가이드라인/주의사항처럼 번호 목록·문단 구분이 의미 있는 안내문에 쓴다.
+function compactMultilineText(input: string | undefined | null) {
+  return (
+    input
+      ?.replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<br[^>]*>/gi, "\n")
+      .replace(/<\/(p|div|li)>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&gt;/g, ">")
+      .replace(/&lt;/g, "<")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, "\"")
+      .split("\n")
+      .map((line) => line.replace(/[ \t]+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n") ?? ""
+  );
+}
+
 function extractMatch(html: string, pattern: RegExp) {
   return pattern.exec(html)?.[1];
 }
@@ -34,6 +57,19 @@ function extractMatch(html: string, pattern: RegExp) {
 function extractDetailValue(html: string, label: string) {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return compactText(
+    extractMatch(
+      html,
+      new RegExp(
+        `<dt[^>]*>\\s*${escapedLabel}\\s*<\\/dt>[\\s\\S]*?<dd[^>]*>([\\s\\S]*?)<\\/dd>`,
+        "i",
+      ),
+    ),
+  );
+}
+
+function extractDetailValueMultiline(html: string, label: string) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return compactMultilineText(
     extractMatch(
       html,
       new RegExp(
@@ -157,6 +193,22 @@ export function parseGangnamCampaignHtml(
   );
   const capacity = capacityMatch ? `${capacityMatch[1]}/${capacityMatch[2]}` : "미정";
 
+  // 로그인 후 "선정된 캠페인" 개인 페이지는 방문/예약 안내 대신 가이드라인·키워드로
+  // 미션과 필수 키워드를 안내한다("리뷰 시 주의사항"은 모든 캠페인에 공통으로 붙는
+  // 상투적 문구라 제외한다). 공개 상세 페이지에는 이 라벨이 없으므로 그 경우엔
+  // 방문/예약 안내로 자연히 대체된다.
+  const guideline = extractDetailValueMultiline(html, "가이드라인");
+  const keywords = extractDetailValueMultiline(html, "키워드")
+    .split("\n")
+    .filter((line) => line !== "복사")
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" | ");
+  const guideMemo = [guideline, keywords && `키워드\n${keywords}`]
+    .filter(Boolean)
+    .join("\n\n");
+
   return {
     title,
     site: "강남맛집",
@@ -171,7 +223,7 @@ export function parseGangnamCampaignHtml(
     companyName: title.replace(/^\[[^\]]+\]\s*/, ""),
     companyPhone: null,
     address: address || "주소 확인 필요",
-    memo: visitInfo || "방문 및 예약 안내를 확인해 주세요.",
+    memo: guideMemo || visitInfo || "방문 및 예약 안내를 확인해 주세요.",
     sticker: "강남맛집",
     accent: "from-[#ffb86b] via-[#ffd6a8] to-[#fff2df]",
     contactLocked: false,

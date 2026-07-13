@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import type { Campaign } from "@/types/campaign";
-import type { Holiday, HolidayType } from "@/types/holiday";
+import type { Holiday } from "@/types/holiday";
 
 export type AppUser = {
   id: string;
@@ -84,14 +84,6 @@ function getSql() {
   }
 
   return global.__reviewCalendarSql;
-}
-
-export async function closeDb() {
-  if (global.__reviewCalendarSql) {
-    await global.__reviewCalendarSql.end();
-    global.__reviewCalendarSql = undefined;
-    global.__reviewCalendarSchemaReady = undefined;
-  }
 }
 
 async function ensureSchema() {
@@ -299,18 +291,6 @@ export async function findUserByUsername(username: string) {
   `;
 
   return rows[0];
-}
-
-export async function findUserById(id: string) {
-  await ensureSchema();
-  const sql = getSql();
-  const rows = await sql<UserRow[]>`
-    ${sql.unsafe(userSelect)}
-    WHERE id = ${id}
-    LIMIT 1
-  `;
-
-  return rows[0] ? mapUser(rows[0]) : undefined;
 }
 
 export async function insertUser(input: {
@@ -682,26 +662,3 @@ export async function upsertHolidays(
   });
 }
 
-export async function insertHolidayOverride(input: {
-  id: string;
-  date: string;
-  name: string;
-  type: HolidayType;
-  isAlternative: boolean;
-  isPublicHoliday: boolean;
-  action: HolidayOverrideAction;
-}) {
-  await ensureSchema();
-  const sql = getSql();
-  const now = new Date().toISOString();
-
-  await sql`
-    INSERT INTO holiday_overrides (
-      id, date, name, type, is_alternative, is_public_holiday,
-      action, created_at, updated_at
-    ) VALUES (
-      ${input.id}, ${input.date}, ${input.name}, ${input.type}, ${input.isAlternative}, ${input.isPublicHoliday},
-      ${input.action}, ${now}, ${now}
-    )
-  `;
-}

@@ -92,7 +92,11 @@ function htmlToLines(html: string): string[] {
   const withBreaks = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<br[^>]*>/gi, "\n")
+    // 중첩된 <div>/<p>는 자기 시작 지점에서도 줄이 나뉘어야 한다 - 닫는 태그만
+    // 기준으로 삼으면 "부모 텍스트<div>자식 텍스트</div>" 형태에서 부모 텍스트와
+    // 자식 텍스트 사이에 줄바꿈이 안 들어가 서로 다른 문장이 붙어버린다.
+    .replace(/<(div|p)(\s[^>]*)?>/gi, "\n")
     .replace(/<\/(div|p|li|tr|td|th|h[1-6]|section|header|footer|label|dt|dd|a)>/gi, "\n")
     .replace(/<[^>]+>/g, "");
 
@@ -126,6 +130,52 @@ function extractValueAfterLabel(
   }
 
   return collected.join(" ").trim();
+}
+
+// extractValueAfterLabel과 달리 줄 단위 구조(예약 안내 항목, 키워드 목록, 미션
+// 체크리스트)를 공백 한 칸으로 뭉개지 않고 줄바꿈으로 보존한다.
+function extractValueAfterLabelMultiline(
+  lines: string[],
+  label: string,
+  stopLabels: string[],
+) {
+  const index = lines.findIndex((line) => line === label);
+
+  if (index === -1) {
+    return "";
+  }
+
+  const collected: string[] = [];
+
+  for (let i = index + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+
+    if (stopLabels.includes(line)) {
+      break;
+    }
+
+    collected.push(line);
+  }
+
+  return collected.join("\n").trim();
+}
+
+const phoneNumberLinePattern = /^\d{2,4}-\d{3,4}-\d{4}$/;
+
+// "복사" 버튼 텍스트, 담당자 연락처(업체 연락처는 항상 수동 입력이라 자동 노출하지
+// 않는다) 관련 줄은 상세 내용에서 제외한다.
+function stripNoiseLines(text: string) {
+  return text
+    .split("\n")
+    .filter(
+      (line) =>
+        line !== "복사" &&
+        line !== "담당자 연락처" &&
+        line !== "연락처 복사" &&
+        !phoneNumberLinePattern.test(line),
+    )
+    .join("\n")
+    .trim();
 }
 
 function extractTitle(lines: string[]) {
@@ -274,10 +324,29 @@ export function parseReviewNoteCampaignHtml(
   const address =
     extractValueAfterLabel(lines, "방문 주소", ["방문 및 예약 안내", "예약 시 주의사항", "키워드 정보"]) ||
     "주소 확인 필요";
-  const visitInfo = extractValueAfterLabel(lines, "방문 및 예약 안내", [
+  const visitInfo = extractValueAfterLabelMultiline(lines, "방문 및 예약 안내", [
     "키워드 정보",
     "체험단 미션",
   ]);
+  const keywords = stripNoiseLines(
+    extractValueAfterLabelMultiline(lines, "키워드 정보", ["체험단 미션"]),
+  )
+    .split("\n")
+    .filter(Boolean)
+    .join(" | ");
+  const mission = stripNoiseLines(
+    extractValueAfterLabelMultiline(lines, "체험단 미션", [
+      "공정위 문구(배너)",
+      "체험단 일정",
+    ]),
+  );
+  const detailMemo = [
+    visitInfo && `방문 및 예약 안내\n${visitInfo}`,
+    keywords && `키워드 정보\n${keywords}`,
+    mission && `체험단 미션\n${mission}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const segments = extractCalendarSegments(html);
   const columnWidthPx = calibrateColumnWidthPx(segments);
@@ -304,7 +373,7 @@ export function parseReviewNoteCampaignHtml(
     companyName: title.replace(/^\[[^\]]+\]\s*/, "") || "리뷰노트 업체",
     companyPhone: null,
     address,
-    memo: visitInfo || "방문 및 예약 안내를 확인해 주세요.",
+    memo: detailMemo || "방문 및 예약 안내를 확인해 주세요.",
     sticker: "리뷰노트",
     accent: "from-[#ffa1cb] via-[#ffd0e4] to-[#fff0f7]",
     contactLocked: false,
