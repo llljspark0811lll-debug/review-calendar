@@ -789,6 +789,11 @@ export default function Home() {
   function handleRegisterLink() {
     setRegisterErrorMessage("");
 
+    if (!parsePreview) {
+      setRegisterErrorMessage("체험단 페이지 내용을 먼저 붙여넣어 주세요.");
+      return;
+    }
+
     startTransition(async () => {
       try {
         const response = await fetch("/api/campaigns", {
@@ -797,7 +802,7 @@ export default function Home() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            content: pasteContent,
+            preview: parsePreview,
             companyPhone: companyPhoneValue.trim(),
           }),
         });
