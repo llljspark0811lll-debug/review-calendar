@@ -65,6 +65,9 @@ type CalendarCell = {
   tertiaryEntries?: string[];
   deco?: string;
   type?: CalendarTone;
+  activeCount?: number;
+  deadlineCount?: number;
+  pickedCount?: number;
 };
 
 const cellStyles: Record<CalendarTone, string> = {
@@ -247,6 +250,9 @@ function createCalendarCells(
         tertiaryEntries: sections[2]?.entries,
         type,
         deco: pickedCampaigns.length ? "🎀" : deadlineCampaigns.length ? "!" : "♡",
+        activeCount: activeCampaigns.length,
+        deadlineCount: deadlineCampaigns.length,
+        pickedCount: pickedCampaigns.length,
       });
       continue;
     }
@@ -1441,7 +1447,7 @@ export default function Home() {
                       key={cell.key}
                       onClick={() => handleCalendarDatePick(cell)}
                       disabled={cell.muted || isSchedulePending}
-                      className={`relative min-h-28 rounded-[28px] border p-3 text-left shadow-[0_14px_26px_rgba(255,197,223,0.22)] transition-all hover:-translate-y-1 hover:rotate-[-1deg] hover:shadow-[0_20px_34px_rgba(255,145,197,0.28)] sm:min-h-32 ${tone}`}
+                      className={`relative min-h-24 rounded-[28px] border p-3 text-left shadow-[0_14px_26px_rgba(255,197,223,0.22)] transition-all hover:-translate-y-1 hover:rotate-[-1deg] hover:shadow-[0_20px_34px_rgba(255,145,197,0.28)] sm:min-h-28 lg:min-h-32 ${tone}`}
                     >
                       {!cell.muted && (
                         <span className="absolute right-3 top-2 text-sm opacity-80">
@@ -1464,8 +1470,28 @@ export default function Home() {
                           </span>
                         </div>
                       ) : null}
+                      {!cell.muted &&
+                      (cell.activeCount || cell.deadlineCount || cell.pickedCount) ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-1 sm:hidden">
+                          {cell.activeCount ? (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#ffd2e6] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#a04676]">
+                              ♡{cell.activeCount}
+                            </span>
+                          ) : null}
+                          {cell.deadlineCount ? (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#ffd5dd] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#8b314a]">
+                              !{cell.deadlineCount}
+                            </span>
+                          ) : null}
+                          {cell.pickedCount ? (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f1e7ff] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#7741a4]">
+                              🎀{cell.pickedCount}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {cell.label ? (
-                        <>
+                        <div className="hidden sm:block">
                           <p
                             className={`text-xs font-bold leading-5 sm:text-sm ${
                               cell.holidayName ? "mt-3" : "mt-5"
@@ -1542,7 +1568,7 @@ export default function Home() {
                               ) : null}
                             </div>
                           ) : null}
-                        </>
+                        </div>
                       ) : null}
                     </button>
                   );
@@ -1864,21 +1890,21 @@ function AuthScreen({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.9)_0,rgba(255,255,255,0)_16%),radial-gradient(circle_at_80%_72%,rgba(229,214,255,0.65)_0,rgba(229,214,255,0)_16%)]" />
       <div className="relative mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-5xl items-center justify-center">
         <section className="grid w-full overflow-hidden rounded-[40px] border-2 border-white/75 bg-white/78 shadow-[0_34px_90px_rgba(233,116,171,0.24)] backdrop-blur-xl lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] p-8 text-white sm:p-10">
-            <p className="font-display text-5xl leading-none sm:text-6xl">
+          <div className="p-6 text-white sm:p-8 lg:p-10">
+            <p className="font-display text-4xl leading-none sm:text-5xl lg:text-6xl">
               리뷰캘린더
             </p>
-            <p className="mt-6 whitespace-nowrap text-base font-bold leading-8 text-white/92">
+            <p className="mt-4 text-sm font-bold leading-6 text-white/92 sm:mt-6 sm:text-base sm:leading-7 lg:max-w-sm lg:text-lg lg:leading-8">
               선정 체험단과 리뷰 마감일을 계정 안에서 편리하게 관리하세요.
             </p>
-            <div className="mt-10 grid gap-3 text-sm font-black text-white/90">
+            <div className="mt-6 grid gap-2 text-xs font-black text-white/90 sm:mt-10 sm:gap-3 sm:text-sm">
               <div className="rounded-[24px] bg-white/14 px-4 py-3">캘린더 일정 관리</div>
               <div className="rounded-[24px] bg-white/14 px-4 py-3">선정 링크 자동 등록</div>
               <div className="rounded-[24px] bg-white/14 px-4 py-3">리뷰 마감 체크</div>
             </div>
           </div>
 
-          <div className="p-6 sm:p-10">
+          <div className="p-6 sm:p-8 lg:p-10">
             <div className="flex rounded-full bg-[#fff1f8] p-1">
               <button
                 type="button"
