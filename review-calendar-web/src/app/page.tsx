@@ -1504,13 +1504,13 @@ export default function Home() {
                               {cell.entries.slice(0, 3).map((entry, entryIndex) => (
                                 <span
                                   key={`${cell.key}-${entryIndex}-${entry}`}
-                                  className="inline-flex max-w-full items-center rounded-full border border-white/70 bg-white/70 px-2 py-1 text-[10px] font-black leading-none opacity-90 shadow-[0_6px_10px_rgba(255,205,227,0.22)] backdrop-blur-sm"
+                                  className="inline-flex max-w-full items-center rounded-full border border-white/70 bg-white/70 px-2 py-1 text-[10px] font-black leading-none text-[#a0397a] opacity-90 shadow-[0_6px_10px_rgba(255,205,227,0.22)] backdrop-blur-sm"
                                 >
                                   <span className="truncate">{entry}</span>
                                 </span>
                               ))}
                               {cell.entries.length > 3 ? (
-                                <span className="inline-flex items-center rounded-full border border-dashed border-white/80 bg-white/55 px-2 py-1 text-[10px] font-black leading-none opacity-80">
+                                <span className="inline-flex items-center rounded-full border border-dashed border-white/80 bg-white/55 px-2 py-1 text-[10px] font-black leading-none text-[#a0397a] opacity-80">
                                   +{cell.entries.length - 3}
                                 </span>
                               ) : null}
