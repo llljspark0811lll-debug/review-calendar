@@ -10,6 +10,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-rounded);
   --font-display: var(--font-display);
+  --font-legible: var(--font-legible);
 }
 
 * {
@@ -70,6 +71,18 @@ button {
 .review-calendar-app select,
 .review-calendar-app input {
   font-weight: 700;
+}
+
+/*
+ * 캘린더 그리드(font-legible)는 Light(300) 굵기 한 종류만 불러오는데,
+ * 안의 텍스트는 대부분 Tailwind font-black/font-bold(700~900)를 쓰고 있어서
+ * 그대로 두면 브라우저가 합성 볼드(synthetic bold)로 두껍게 그린다.
+ * 실제 로드한 굵기(300)로 강제해 얇은 모양 그대로 렌더링되게 한다.
+ */
+.review-calendar-app .font-legible,
+.review-calendar-app .font-legible .font-black,
+.review-calendar-app .font-legible .font-bold {
+  font-weight: 300;
 }
 
 .review-calendar-app button[class*="rounded-full"],

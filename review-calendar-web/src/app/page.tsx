@@ -74,16 +74,30 @@ const cellStyles: Record<CalendarTone, string> = {
   plain: "bg-white/80 border-white/70 text-[#a66384]",
   soft: "bg-[#fff2f8] border-[#ffd2e6] text-[#a04676]",
   primary: "bg-[#ffc9e1] border-[#ff9fc6] text-[#7c2752]",
-  selected:
-    "bg-[linear-gradient(180deg,#ff88bb_0%,#ff9bc7_100%)] border-[#ff5ea3] text-white shadow-[0_20px_32px_rgba(255,104,174,0.34)]",
+  selected: "bg-[#fff2f8] border-[#ffd2e6] text-[#a04676]",
   warn: "bg-[#fff0c9] border-[#ffd07a] text-[#8a5b19]",
-  danger: "bg-[#ffd5dd] border-[#ff95a7] text-[#8b314a]",
-  lavender: "bg-[#f1e7ff] border-[#d4b5ff] text-[#7741a4]",
+  danger: "bg-[#fff2f8] border-[#ffd2e6] text-[#a04676]",
+  lavender: "bg-[#fff2f8] border-[#ffd2e6] text-[#a04676]",
 };
 
 function formatMonthDay(dateString: string) {
   const date = new Date(dateString);
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
+
+function CampaignTitle({ title }: { title: string }) {
+  const match = title.match(/^(\[[^\]]+\])\s*([\s\S]*)$/);
+
+  if (!match || !match[2]) {
+    return <>{title}</>;
+  }
+
+  return (
+    <>
+      <span className="block">{match[1]}</span>
+      <span className="block">{match[2]}</span>
+    </>
+  );
 }
 
 async function readApiJson<T>(
@@ -1405,7 +1419,7 @@ export default function Home() {
                 </p>
               ) : null}
 
-              <div className="mt-6 grid grid-cols-7 gap-2 text-center text-xs font-black tracking-[0.18em] text-[#cb6c9f] sm:gap-3 sm:text-sm">
+              <div className="font-legible mt-6 grid grid-cols-7 gap-2 text-center text-xs font-black tracking-[0.18em] text-[#cb6c9f] sm:gap-3 sm:text-sm">
                 {weekDays.map((day, index) => (
                   <div
                     key={day}
@@ -1422,9 +1436,10 @@ export default function Home() {
                 ))}
               </div>
 
-              <div className="mt-4 grid grid-cols-7 gap-2 sm:gap-3">
+              <div className="font-legible mt-4 grid grid-cols-7 gap-2 sm:gap-3">
                 {calendarCells.map((cell, index) => {
                   const dayOfWeek = index % 7;
+                  const isToday = !cell.muted && cell.dateIso === todayIso;
                   const dayNumberTone = cell.muted
                     ? "text-[#d9aec6]"
                     : cell.holidayName
@@ -1437,9 +1452,11 @@ export default function Home() {
                   const tone = cell.muted
                     ? "bg-white/50 border-white/40 text-[#d9aec6]"
                     : `${cellStyles[cell.type ?? "plain"]} ${
-                        cell.holidayName
-                          ? "ring-1 ring-inset ring-[#ffb3c8]"
-                          : ""
+                        isToday
+                          ? "ring-2 ring-inset ring-[#ff6f91]"
+                          : cell.holidayName
+                            ? "ring-1 ring-inset ring-[#ffb3c8]"
+                            : ""
                       }`;
 
                   return (
@@ -1450,11 +1467,23 @@ export default function Home() {
                       className={`relative min-h-24 rounded-[28px] border p-3 text-left shadow-[0_14px_26px_rgba(255,197,223,0.22)] transition-all hover:-translate-y-1 hover:rotate-[-1deg] hover:shadow-[0_20px_34px_rgba(255,145,197,0.28)] sm:min-h-28 lg:min-h-32 ${tone}`}
                     >
                       {!cell.muted && (
-                        <span className="absolute right-3 top-2 text-sm opacity-80">
+                        <span
+                          className={`absolute right-3 top-2 ${
+                            cell.deadlineCount
+                              ? "text-lg font-black text-[#dc2626]"
+                              : "text-sm opacity-80"
+                          }`}
+                        >
                           {cell.deco}
                         </span>
                       )}
-                      <span className={`text-lg font-black sm:text-xl ${dayNumberTone}`}>
+                      <span
+                        className={`inline-flex items-center justify-center text-lg font-black sm:text-xl ${
+                          isToday
+                            ? "h-7 w-7 rounded-full border-2 border-[#ff5ea3] bg-white/90 text-[#ff5ea3] sm:h-8 sm:w-8"
+                            : dayNumberTone
+                        }`}
+                      >
                         {cell.day}
                       </span>
                       {cell.holidayName ? (
@@ -1479,7 +1508,7 @@ export default function Home() {
                             </span>
                           ) : null}
                           {cell.deadlineCount ? (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#ffd5dd] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#8b314a]">
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#dc2626] px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
                               !{cell.deadlineCount}
                             </span>
                           ) : null}
@@ -1716,7 +1745,7 @@ export default function Home() {
                     {parsePreview.site} 인식 완료 ✓
                   </p>
                   <p className="mt-2 text-base font-black text-[#7f355b]">
-                    {parsePreview.title}
+                    <CampaignTitle title={parsePreview.title} />
                   </p>
                   <p className="mt-1 text-sm text-[#8a5d75]">{parsePreview.reward}</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#8a5d75]">
@@ -1791,6 +1820,7 @@ export default function Home() {
           confirmedCampaigns={campaigns.filter(
             (campaign) => campaign.selectedDate?.slice(0, 10) === activeDateCell.dateIso,
           )}
+          holidayMap={holidayMap}
           isPending={isSchedulePending}
           onClose={() => setActiveDateCell(null)}
           onConfirm={(campaign) =>
@@ -2131,10 +2161,10 @@ function CheckpointCard({
 }) {
   const bgClass =
     tone === "yellow"
-      ? "bg-[linear-gradient(135deg,#ffd87d,#fff0c9)]"
+      ? "bg-[#ffe1a8]"
       : tone === "lavender"
-        ? "bg-[linear-gradient(135deg,#cfb3ff,#f1e7ff)]"
-        : "bg-[linear-gradient(135deg,#ff9fcb,#ffe2f0)]";
+        ? "bg-[#dcc3ff]"
+        : "bg-[#ffb3d1]";
 
   return (
     <button
@@ -2245,7 +2275,7 @@ function CampaignListSection({
                       <Badge tone="yellow">{statusLabel(campaign.status)}</Badge>
                     </div>
                     <h3 className="mt-3 text-2xl font-black text-[#8d315f]">
-                      {campaign.title}
+                      <CampaignTitle title={campaign.title} />
                     </h3>
                     <p className="mt-2 text-sm text-[#92617c]">
                       제공 내역: {campaign.reward}
@@ -2288,7 +2318,7 @@ function CampaignListSection({
                         <Badge tone="yellow">{statusLabel(campaign.status)}</Badge>
                       </div>
                       <h3 className="mt-3 text-2xl font-black text-[#8d315f]">
-                        {campaign.title}
+                        <CampaignTitle title={campaign.title} />
                       </h3>
                       <p className="mt-2 text-sm text-[#92617c]">
                         제공 내역: {campaign.reward}
@@ -2402,7 +2432,7 @@ function CampaignDetailSection({
             <Badge tone="mint">연락처 입력 완료</Badge>
           </div>
           <h3 className="mt-3 text-3xl font-black text-[#8f315f]">
-            {selectedCampaign.title}
+            <CampaignTitle title={selectedCampaign.title} />
           </h3>
           <p className="mt-2 text-sm leading-6 text-[#8a5d75]">
             선택한 체험단의 제공 내역, 체험 기간, 리뷰 마감일, 연락처를 한 화면에서
@@ -2459,6 +2489,7 @@ function DatePickModal({
   holidayName,
   campaigns,
   confirmedCampaigns,
+  holidayMap,
   isPending,
   onClose,
   onConfirm,
@@ -2469,6 +2500,7 @@ function DatePickModal({
   holidayName?: string;
   campaigns: Campaign[];
   confirmedCampaigns: Campaign[];
+  holidayMap: Map<string, Holiday>;
   isPending: boolean;
   onClose: () => void;
   onConfirm: (campaign: Campaign) => void;
@@ -2477,6 +2509,7 @@ function DatePickModal({
 }) {
   const [availablePage, setAvailablePage] = useState(1);
   const [confirmedPage, setConfirmedPage] = useState(1);
+  const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
   const availablePageCount = Math.max(1, Math.ceil(campaigns.length / 3));
   const confirmedPageCount = Math.max(1, Math.ceil(confirmedCampaigns.length / 3));
   const visibleAvailableCampaigns = campaigns.slice(
@@ -2556,23 +2589,30 @@ function DatePickModal({
                       <div className="min-w-0">
                         <div className="flex flex-wrap gap-2">
                           <Badge>{campaign.site}</Badge>
-                          <Badge tone="yellow">체험 가능</Badge>
                         </div>
                         <h4 className="mt-3 text-xl font-black text-[#8d315f]">
-                          {campaign.title}
+                          <CampaignTitle title={campaign.title} />
                         </h4>
                         <p className="mt-2 text-sm text-[#8d5b75]">
                           체험 기간: {formatMonthDay(campaign.experienceStartDate)} -{" "}
                           {formatMonthDay(campaign.experienceEndDate)}
                         </p>
                       </div>
-                      <button
-                        onClick={() => onConfirm(campaign)}
-                        disabled={isPending}
-                        className="inline-flex min-w-[96px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-4 py-2 text-[13px] font-bold leading-none text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isPending ? "확정 중..." : "체험 확정"}
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                        <button
+                          onClick={() => setDetailCampaign(campaign)}
+                          className="inline-flex min-w-[96px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#ffe1a8] px-4 py-2 text-[13px] font-bold leading-none text-[#8b5e1c] shadow-[0_16px_28px_rgba(255,216,168,0.35)]"
+                        >
+                          상세정보
+                        </button>
+                        <button
+                          onClick={() => onConfirm(campaign)}
+                          disabled={isPending}
+                          className="inline-flex min-w-[96px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-4 py-2 text-[13px] font-bold leading-none text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isPending ? "확정 중..." : "예약확정"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -2625,7 +2665,7 @@ function DatePickModal({
                           <Badge tone="mint">확정 완료</Badge>
                         </div>
                         <h4 className="mt-3 text-lg font-black text-[#8d315f]">
-                          {campaign.title}
+                          <CampaignTitle title={campaign.title} />
                         </h4>
                         <p className="mt-2 text-sm text-[#8d5b75]">
                           확정 시간: {formatDateTime(campaign.selectedDate)}
@@ -2657,6 +2697,72 @@ function DatePickModal({
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {detailCampaign ? (
+        <CampaignInfoDialog
+          campaign={detailCampaign}
+          holidayMap={holidayMap}
+          onClose={() => setDetailCampaign(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CampaignInfoDialog({
+  campaign,
+  holidayMap,
+  onClose,
+}: {
+  campaign: Campaign;
+  holidayMap: Map<string, Holiday>;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
+      <div className="max-h-[min(88vh,980px)] w-full max-w-lg overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <Badge>{campaign.site}</Badge>
+            <h3 className="mt-3 text-2xl font-black text-[#8f315f]">
+              <CampaignTitle title={campaign.title} />
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)]"
+          >
+            닫기
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <DetailCard label="제공 내역" value={campaign.reward} />
+          <DetailCard label="주소" value={campaign.address} />
+          <DetailCard
+            label="체험 기간"
+            value={`${campaign.experienceStartDate} ~ ${campaign.experienceEndDate}`}
+          />
+          <DetailCard label="리뷰 마감일" value={campaign.reviewDeadline} />
+          <DetailCard
+            label="전화번호"
+            value={campaign.companyPhone ?? "직접 입력 필요"}
+          />
+          <DetailCard
+            label="확정 일정"
+            value={formatConfirmedSchedule(campaign.selectedDate, holidayMap)}
+          />
+        </div>
+
+        <div className="mt-3 rounded-[24px] border border-white/70 bg-white/85 px-4 py-3 shadow-[0_10px_18px_rgba(255,207,229,0.18)]">
+          <p className="text-xs font-black tracking-[0.12em] text-[#d85f98]">
+            상세 내용
+          </p>
+          <p className="mt-2 whitespace-pre-line text-sm font-bold leading-6 text-[#7b4b66]">
+            {campaign.memo}
+          </p>
         </div>
       </div>
     </div>
@@ -2711,7 +2817,7 @@ function CheckpointDetailModal({
                       <Badge tone="yellow">{statusLabel(campaign.status)}</Badge>
                     </div>
                     <h4 className="mt-3 text-xl font-black text-[#8d315f]">
-                      {campaign.title}
+                      <CampaignTitle title={campaign.title} />
                     </h4>
                     <div className="mt-2 space-y-1 text-sm text-[#8d5b75]">
                       {checkpoint.id === "today-visit" ? (
@@ -2778,7 +2884,7 @@ function DeleteCampaignConfirmModal({
             <Badge tone="yellow">{statusLabel(campaign.status)}</Badge>
           </div>
           <h3 className="mt-3 text-2xl font-black text-[#8d315f]">
-            {campaign.title}
+            <CampaignTitle title={campaign.title} />
           </h3>
           <p className="mt-2 text-sm leading-6 text-[#8a5d75]">
             삭제하면 이 체험단의 일정, 상태, 상세정보까지 현재 저장된 관련 데이터가 함께 제거돼요.
