@@ -24,6 +24,13 @@ const legible = Do_Hyeon({
   display: "swap",
 });
 
+const legibleThin = localFont({
+  src: "../../node_modules/pretendard/dist/web/static/woff2/Pretendard-Regular.woff2",
+  variable: "--font-legible-thin",
+  weight: "400",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "리뷰캘린더",
   description: "선정된 체험단과 리뷰 마감일을 귀엽게 관리하는 일정 대시보드",
@@ -37,7 +44,7 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      className={`${rounded.variable} ${display.variable} ${legible.variable} h-full antialiased`}
+      className={`${rounded.variable} ${display.variable} ${legible.variable} ${legibleThin.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">{children}</body>
     </html>

@@ -11,6 +11,7 @@
   --font-sans: var(--font-rounded);
   --font-display: var(--font-display);
   --font-legible: var(--font-legible);
+  --font-legible-thin: var(--font-legible-thin);
 }
 
 * {
@@ -88,6 +89,26 @@ button {
 .review-calendar-app button[class*="rounded-full"],
 .review-calendar-app select[class*="rounded-full"] {
   min-height: 42px;
+}
+
+/*
+ * 브라우저 100% 배율에서도 110% 확대했을 때와 비슷한 크기/선명도로 보이도록,
+ * 캘린더 그리드(font-legible) 안의 작은 텍스트만 한 단계 더 키운다.
+ */
+.review-calendar-app .font-legible .text-xs {
+  font-size: 1rem;
+}
+
+.review-calendar-app .font-legible .text-sm {
+  font-size: 1.125rem;
+}
+
+.review-calendar-app .font-legible [class~="text-[10px]"] {
+  font-size: 0.8125rem;
+}
+
+.review-calendar-app .font-legible [class~="text-[11px]"] {
+  font-size: 0.875rem;
 }
 
 ::selection {

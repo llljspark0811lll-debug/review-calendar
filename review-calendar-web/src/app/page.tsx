@@ -1464,7 +1464,7 @@ export default function Home() {
                       key={cell.key}
                       onClick={() => handleCalendarDatePick(cell)}
                       disabled={cell.muted || isSchedulePending}
-                      className={`relative min-h-24 rounded-[28px] border p-3 text-left shadow-[0_14px_26px_rgba(255,197,223,0.22)] transition-all hover:-translate-y-1 hover:rotate-[-1deg] hover:shadow-[0_20px_34px_rgba(255,145,197,0.28)] sm:min-h-28 lg:min-h-32 ${tone}`}
+                      className={`relative min-h-24 rounded-[28px] border p-3 text-left shadow-[0_14px_26px_rgba(255,197,223,0.22)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_34px_rgba(255,145,197,0.28)] sm:min-h-28 lg:min-h-32 ${tone}`}
                     >
                       {!cell.muted && (
                         <span
@@ -1533,7 +1533,7 @@ export default function Home() {
                               {cell.entries.slice(0, 3).map((entry, entryIndex) => (
                                 <span
                                   key={`${cell.key}-${entryIndex}-${entry}`}
-                                  className="inline-flex max-w-full items-center rounded-full border border-white/70 bg-white/70 px-2 py-1 text-[10px] font-black leading-none text-[#a0397a] opacity-90 shadow-[0_6px_10px_rgba(255,205,227,0.22)] backdrop-blur-sm"
+                                  className="font-legible-thin inline-flex max-w-full items-center rounded-full border border-white/70 bg-white/70 px-2 py-1 text-[10px] font-black leading-none text-[#a0397a] opacity-90 shadow-[0_6px_10px_rgba(255,205,227,0.22)] backdrop-blur-sm"
                                 >
                                   <span className="truncate">{entry}</span>
                                 </span>
@@ -1557,7 +1557,7 @@ export default function Home() {
                                     .map((entry, entryIndex) => (
                                     <span
                                       key={`${cell.key}-secondary-${entryIndex}-${entry}`}
-                                      className="inline-flex max-w-full items-center rounded-full border border-[#ffc2cf] bg-[#fff2f5] px-2 py-1 text-[10px] font-black leading-none text-[#a84763] shadow-[0_6px_10px_rgba(255,205,227,0.18)]"
+                                      className="font-legible-thin inline-flex max-w-full items-center rounded-full border border-[#ffc2cf] bg-[#fff2f5] px-2 py-1 text-[10px] font-black leading-none text-[#a84763] shadow-[0_6px_10px_rgba(255,205,227,0.18)]"
                                     >
                                       <span className="truncate">{entry}</span>
                                     </span>
@@ -1583,7 +1583,7 @@ export default function Home() {
                                     .map((entry, entryIndex) => (
                                     <span
                                       key={`${cell.key}-tertiary-${entryIndex}-${entry}`}
-                                      className="inline-flex max-w-full items-center rounded-full border border-[#ffbfd8] bg-[#fff4fa] px-2 py-1 text-[10px] font-black leading-none text-[#a54777] shadow-[0_6px_10px_rgba(255,205,227,0.18)]"
+                                      className="font-legible-thin inline-flex max-w-full items-center rounded-full border border-[#ffbfd8] bg-[#fff4fa] px-2 py-1 text-[10px] font-black leading-none text-[#a54777] shadow-[0_6px_10px_rgba(255,205,227,0.18)]"
                                     >
                                       <span className="truncate">{entry}</span>
                                     </span>
