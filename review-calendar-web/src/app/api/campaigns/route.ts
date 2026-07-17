@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { insertCampaign } from "@/lib/db";
+import { toClientMessage } from "@/lib/errors";
 import type { Campaign } from "@/types/campaign";
 
 export const runtime = "nodejs";
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
       id: randomUUID(),
       companyPhone,
       contactLocked: false,
+      status: "unscheduled",
+      selectedDate: null,
     };
 
     await insertCampaign(campaign, user.id);
@@ -69,12 +72,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ campaign }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "체험단 등록 중 오류가 발생했어요.",
-      },
+      { message: toClientMessage(error, "체험단 등록 중 오류가 발생했어요.") },
       { status: 400 },
     );
   }

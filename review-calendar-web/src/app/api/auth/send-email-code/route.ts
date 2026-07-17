@@ -7,7 +7,12 @@ import {
   normalizeEmail,
   sendEmailVerificationCode,
 } from "@/lib/auth";
-import { findUserByEmail, insertEmailVerificationCode } from "@/lib/db";
+import {
+  consumeRateLimit,
+  findUserByEmail,
+  insertEmailVerificationCode,
+} from "@/lib/db";
+import { toClientMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -27,6 +32,15 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { message: "이미 가입된 이메일이에요." },
         { status: 400 },
+      );
+    }
+
+    const rateLimit = await consumeRateLimit("send-email-code", email, 5, 60 * 60);
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { message: "인증번호 요청이 너무 많아요. 잠시 후 다시 시도해 주세요." },
+        { status: 429 },
       );
     }
 
@@ -57,12 +71,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "인증번호 발송 중 오류가 발생했어요.",
-      },
+      { message: toClientMessage(error, "인증번호 발송 중 오류가 발생했어요.") },
       { status: 400 },
     );
   }

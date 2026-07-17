@@ -5,7 +5,8 @@ import {
   normalizeUsername,
   verifyPassword,
 } from "@/lib/auth";
-import { findUserByUsername } from "@/lib/db";
+import { consumeRateLimit, findUserByUsername } from "@/lib/db";
+import { toClientMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,15 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { message: "아이디와 비밀번호를 확인해 주세요." },
         { status: 400 },
+      );
+    }
+
+    const rateLimit = await consumeRateLimit("login", username, 5, 60 * 15);
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { message: "로그인 시도가 너무 많아요. 잠시 후 다시 시도해 주세요." },
+        { status: 429 },
       );
     }
 
@@ -50,12 +60,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "로그인 중 오류가 발생했어요.",
-      },
+      { message: toClientMessage(error, "로그인 중 오류가 발생했어요.") },
       { status: 400 },
     );
   }

@@ -215,7 +215,7 @@ function createCalendarCells(
     const deadlineEntries = deadlineCampaigns.map((campaign) => campaign.title);
     const pickedEntries = pickedCampaigns.map(
       (campaign) =>
-        `방문 · ${campaign.title} ${formatDateTime(campaign.selectedDate).split(" ").at(-1) ?? ""}`.trim(),
+        `${campaign.title} ${formatDateTime(campaign.selectedDate).split(" ").at(-1) ?? ""}`.trim(),
     );
 
     const sections = [
@@ -932,7 +932,11 @@ export default function Home() {
     })();
   }
 
-  function handleConfirmCampaignForDate(campaign: Campaign, dateIso: string) {
+  function handleConfirmCampaignForDate(
+    campaign: Campaign,
+    dateIso: string,
+    time: string,
+  ) {
     setScheduleErrorMessage("");
     setScheduleMessage("");
 
@@ -947,7 +951,7 @@ export default function Home() {
     }
 
     const pickedDateIso = dateIso;
-    const selectedDate = `${pickedDateIso}T12:00:00`;
+    const selectedDate = `${pickedDateIso}T${time}:00`;
     setIsSchedulePending(true);
 
     void (async () => {
@@ -1818,13 +1822,15 @@ export default function Home() {
               campaign.experienceEndDate >= activeDateCell.dateIso!,
           )}
           confirmedCampaigns={campaigns.filter(
-            (campaign) => campaign.selectedDate?.slice(0, 10) === activeDateCell.dateIso,
+            (campaign) =>
+              campaign.status === "scheduled" &&
+              campaign.selectedDate?.slice(0, 10) === activeDateCell.dateIso,
           )}
           holidayMap={holidayMap}
           isPending={isSchedulePending}
           onClose={() => setActiveDateCell(null)}
-          onConfirm={(campaign) =>
-            handleConfirmCampaignForDate(campaign, activeDateCell.dateIso!)
+          onConfirm={(campaign, time) =>
+            handleConfirmCampaignForDate(campaign, activeDateCell.dateIso!, time)
           }
           onCancel={handleCancelCampaignForDate}
           onComplete={handleMarkCampaignCompleted}
@@ -2503,13 +2509,14 @@ function DatePickModal({
   holidayMap: Map<string, Holiday>;
   isPending: boolean;
   onClose: () => void;
-  onConfirm: (campaign: Campaign) => void;
+  onConfirm: (campaign: Campaign, time: string) => void;
   onCancel: (campaign: Campaign) => void;
   onComplete: (campaign: Campaign) => void;
 }) {
   const [availablePage, setAvailablePage] = useState(1);
   const [confirmedPage, setConfirmedPage] = useState(1);
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<Campaign | null>(null);
   const availablePageCount = Math.max(1, Math.ceil(campaigns.length / 3));
   const confirmedPageCount = Math.max(1, Math.ceil(confirmedCampaigns.length / 3));
   const visibleAvailableCampaigns = campaigns.slice(
@@ -2606,7 +2613,7 @@ function DatePickModal({
                           상세정보
                         </button>
                         <button
-                          onClick={() => onConfirm(campaign)}
+                          onClick={() => setConfirmTarget(campaign)}
                           disabled={isPending}
                           className="inline-flex min-w-[96px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-4 py-2 text-[13px] font-bold leading-none text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
@@ -2662,7 +2669,6 @@ function DatePickModal({
                       <div>
                         <div className="flex flex-wrap gap-2">
                           <Badge>{campaign.site}</Badge>
-                          <Badge tone="mint">확정 완료</Badge>
                         </div>
                         <h4 className="mt-3 text-lg font-black text-[#8d315f]">
                           <CampaignTitle title={campaign.title} />
@@ -2707,6 +2713,88 @@ function DatePickModal({
           onClose={() => setDetailCampaign(null)}
         />
       ) : null}
+
+      {confirmTarget ? (
+        <ConfirmTimeDialog
+          campaign={confirmTarget}
+          isPending={isPending}
+          onConfirm={(time) => {
+            onConfirm(confirmTarget, time);
+            setConfirmTarget(null);
+          }}
+          onClose={() => setConfirmTarget(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ConfirmTimeDialog({
+  campaign,
+  isPending,
+  onConfirm,
+  onClose,
+}: {
+  campaign: Campaign;
+  isPending: boolean;
+  onConfirm: (time: string) => void;
+  onClose: () => void;
+}) {
+  const [time, setTime] = useState("12:00");
+  const quickTimes = ["11:00", "12:00", "18:00", "19:00"];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-[32px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+        <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
+          방문 시간 지정
+        </p>
+        <h3 className="mt-2 text-xl font-black text-[#8f315f]">
+          <CampaignTitle title={campaign.title} />
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-[#8a5d75]">
+          예약확정할 방문 시간을 골라주세요.
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {quickTimes.map((quickTime) => (
+            <button
+              key={quickTime}
+              onClick={() => setTime(quickTime)}
+              className={`inline-flex min-w-[64px] items-center justify-center whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold ${
+                time === quickTime
+                  ? "bg-[#ff88bb] text-white"
+                  : "bg-white text-[#c6538c] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+              }`}
+            >
+              {quickTime}
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="time"
+          value={time}
+          onChange={(event) => setTime(event.target.value)}
+          className="mt-3 w-full rounded-full border border-[#ffd4e7] bg-white px-4 py-2 text-sm font-bold text-[#7f355b]"
+        />
+
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+          >
+            취소
+          </button>
+          <button
+            onClick={() => onConfirm(time)}
+            disabled={isPending}
+            className="flex-1 rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-4 py-2 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPending ? "확정 중..." : "확정하기"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

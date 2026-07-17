@@ -1,3 +1,4 @@
+import { UserFacingError } from "@/lib/errors";
 import { parseGangnamCampaign, parseGangnamCampaignHtml } from "@/lib/gangnam/parser";
 import type { CampaignParser } from "@/lib/parsers/types";
 
@@ -13,7 +14,7 @@ export const gangnamParser: CampaignParser = {
     const campaignId = getCampaignId(url);
 
     if (!campaignId || campaignId === "unknown") {
-      throw new Error("강남맛집 체험단 상세 링크를 입력해 주세요.");
+      throw new UserFacingError("강남맛집 체험단 상세 링크를 입력해 주세요.");
     }
 
     return parseGangnamCampaign(campaignId, url.href);

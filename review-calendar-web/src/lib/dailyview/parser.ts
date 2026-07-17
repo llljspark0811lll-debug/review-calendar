@@ -1,3 +1,4 @@
+import { UserFacingError } from "@/lib/errors";
 import type { ParsedCampaign } from "@/lib/parsers/types";
 
 const DAILYVIEW_HOST = "dailyview.kr";
@@ -114,7 +115,7 @@ function parsePersonalDailyviewCampaignHtml(
     .match(/(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);
 
   if (!periodMatch) {
-    throw new Error("데일리뷰 체험단 기간을 확인하지 못했어요.");
+    throw new UserFacingError("데일리뷰 체험단 기간을 확인하지 못했어요.");
   }
 
   return {
@@ -175,11 +176,13 @@ async function fetchDailyviewHtml(campaignId: string) {
     });
   } catch (error) {
     const message = error instanceof Error ? ` (${error.message})` : "";
-    throw new Error(`데일리뷰 체험단 정보를 불러오지 못했어요${message}.`);
+    throw new UserFacingError(`데일리뷰 체험단 정보를 불러오지 못했어요${message}.`);
   }
 
   if (!response.ok) {
-    throw new Error(`데일리뷰 체험단 정보를 불러오지 못했어요 (HTTP ${response.status}).`);
+    throw new UserFacingError(
+      `데일리뷰 체험단 정보를 불러오지 못했어요 (HTTP ${response.status}).`,
+    );
   }
 
   return response.text();
@@ -205,7 +208,7 @@ function parsePublicDailyviewCampaignHtml(
   const reviewPeriod = parseReviewPeriod(html);
 
   if (!reviewPeriod) {
-    throw new Error("데일리뷰 체험단 기간을 확인하지 못했어요.");
+    throw new UserFacingError("데일리뷰 체험단 기간을 확인하지 못했어요.");
   }
 
   const capacityMatch = html.match(

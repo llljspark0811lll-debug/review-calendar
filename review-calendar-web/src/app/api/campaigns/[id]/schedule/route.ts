@@ -5,6 +5,7 @@ import {
   findCampaignById,
   updateCampaignSchedule,
 } from "@/lib/db";
+import { toClientMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -104,12 +105,7 @@ export async function PATCH(
     });
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "\uc77c\uc815 \ud655\uc815 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc5b4\uc694.",
-      },
+      { message: toClientMessage(error, "\uc77c\uc815 \ud655\uc815 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc5b4\uc694.") },
       { status: 400 },
     );
   }

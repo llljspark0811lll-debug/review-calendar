@@ -1,3 +1,4 @@
+import { UserFacingError } from "@/lib/errors";
 import type { CampaignParser, ParsedCampaign } from "@/lib/parsers/types";
 
 const parserMatchers = [
@@ -52,13 +53,13 @@ export async function parseCampaignLink(
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new Error("올바른 링크 형식이 아니에요.");
+    throw new UserFacingError("올바른 링크 형식이 아니에요.");
   }
 
   const parserMatcher = findParserMatcher(url);
 
   if (!parserMatcher) {
-    throw new Error("아직 지원하지 않는 체험단 사이트예요.");
+    throw new UserFacingError("아직 지원하지 않는 체험단 사이트예요.");
   }
 
   const parser = await loadParser(parserMatcher.id);
@@ -86,7 +87,7 @@ export async function parseCampaignContent(
   const trimmed = rawContent.trim();
 
   if (!trimmed) {
-    throw new Error("붙여넣은 내용이 비어 있어요.");
+    throw new UserFacingError("붙여넣은 내용이 비어 있어요.");
   }
 
   if (looksLikeBareUrl(trimmed)) {
@@ -96,7 +97,7 @@ export async function parseCampaignContent(
   const parserId = detectParserIdFromContent(trimmed);
 
   if (!parserId) {
-    throw new Error(
+    throw new UserFacingError(
       "지원하는 체험단 사이트 페이지를 찾지 못했어요. 선정된 체험단 상세 페이지에서 전체 복사(Ctrl+A → Ctrl+C)해서 다시 붙여넣어 주세요.",
     );
   }

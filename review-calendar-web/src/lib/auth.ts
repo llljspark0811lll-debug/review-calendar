@@ -16,6 +16,7 @@ import {
   consumeEmailVerificationCode,
   type AppUser,
 } from "@/lib/db";
+import { UserFacingError } from "@/lib/errors";
 
 const scrypt = promisify(scryptCallback);
 const sessionCookieName = "review_calendar_session";
@@ -101,7 +102,7 @@ export async function sendEmailVerificationCode(email: string, code: string) {
   });
 
   if (!response.ok) {
-    throw new Error("인증번호 메일 발송에 실패했어요.");
+    throw new UserFacingError("인증번호 메일 발송에 실패했어요.");
   }
 
   return { sent: true as const };

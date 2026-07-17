@@ -1,4 +1,5 @@
 import { parseDailyviewCampaign, parseDailyviewCampaignHtml } from "@/lib/dailyview/parser";
+import { UserFacingError } from "@/lib/errors";
 import type { CampaignParser } from "@/lib/parsers/types";
 
 function getCampaignId(url: URL) {
@@ -13,7 +14,7 @@ export const dailyviewParser: CampaignParser = {
     const campaignId = getCampaignId(url);
 
     if (!campaignId || campaignId === "unknown") {
-      throw new Error("데일리뷰 체험단 상세 링크를 입력해 주세요.");
+      throw new UserFacingError("데일리뷰 체험단 상세 링크를 입력해 주세요.");
     }
 
     return parseDailyviewCampaign(campaignId, url.href);

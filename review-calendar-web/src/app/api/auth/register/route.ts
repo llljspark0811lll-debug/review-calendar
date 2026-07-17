@@ -10,6 +10,7 @@ import {
   verifyEmailCode,
 } from "@/lib/auth";
 import { findUserByEmail, findUserByUsername, insertUser } from "@/lib/db";
+import { toClientMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -92,12 +93,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ user });
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "회원가입 중 오류가 발생했어요.",
-      },
+      { message: toClientMessage(error, "회원가입 중 오류가 발생했어요.") },
       { status: 400 },
     );
   }

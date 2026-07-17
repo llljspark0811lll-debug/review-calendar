@@ -1,3 +1,4 @@
+import { UserFacingError } from "@/lib/errors";
 import type { ParsedCampaign } from "@/lib/parsers/types";
 
 const GANGNAM_HOST = "xn--939au0g4vj8sq.net";
@@ -157,7 +158,7 @@ async function fetchGangnamHtml(campaignId: string) {
   }
 
   const message = lastError instanceof Error ? ` (${lastError.message})` : "";
-  throw new Error(`강남맛집 체험단 정보를 불러오지 못했어요${message}.`);
+  throw new UserFacingError(`강남맛집 체험단 정보를 불러오지 못했어요${message}.`);
 }
 
 export function parseGangnamCampaignHtml(
@@ -183,7 +184,7 @@ export function parseGangnamCampaignHtml(
   const reviewPeriod = parseDateRange(extractDetailValue(html, "리뷰 등록기간"));
 
   if (!reviewPeriod) {
-    throw new Error("강남맛집 체험단 기간을 확인하지 못했어요.");
+    throw new UserFacingError("강남맛집 체험단 기간을 확인하지 못했어요.");
   }
 
   const visitInfo = extractDetailValue(html, "방문 및 예약");

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import type { Campaign } from "@/types/campaign";
 import type { Holiday } from "@/types/holiday";
@@ -80,6 +81,11 @@ function getSql() {
       prepare: false,
       ssl: requiresSsl ? "require" : undefined,
       onnotice: () => {},
+      // 서버리스 인스턴스마다 별도 풀이 뜨므로, 인스턴스당 커넥션 수를 낮게 잡아
+      // 동시 콜드스타트가 몰려도 DB 커넥션 한도를 빠르게 소진하지 않게 한다.
+      max: 3,
+      idle_timeout: 20,
+      connect_timeout: 10,
     });
   }
 
@@ -204,6 +210,20 @@ async function ensureSchema() {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
         )
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS rate_limit_events (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL,
+        identifier TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+
+      await sql`
+        CREATE INDEX IF NOT EXISTS rate_limit_events_lookup_idx
+        ON rate_limit_events(scope, identifier, created_at)
       `;
 
       await sql`
@@ -377,6 +397,39 @@ export async function insertEmailVerificationCode(input: {
       ${input.id}, ${input.email.toLowerCase()}, ${input.codeHash}, ${input.expiresAt}, ${new Date().toISOString()}
     )
   `;
+}
+
+export async function consumeRateLimit(
+  scope: string,
+  identifier: string,
+  limit: number,
+  windowSeconds: number,
+) {
+  await ensureSchema();
+  const sql = getSql();
+  const windowStart = new Date(Date.now() - windowSeconds * 1000).toISOString();
+
+  await sql`
+    DELETE FROM rate_limit_events
+    WHERE scope = ${scope} AND identifier = ${identifier} AND created_at < ${windowStart}
+  `;
+
+  const rows = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count
+    FROM rate_limit_events
+    WHERE scope = ${scope} AND identifier = ${identifier}
+  `;
+
+  if ((rows[0]?.count ?? 0) >= limit) {
+    return { allowed: false };
+  }
+
+  await sql`
+    INSERT INTO rate_limit_events (id, scope, identifier)
+    VALUES (${randomUUID()}, ${scope}, ${identifier})
+  `;
+
+  return { allowed: true };
 }
 
 export async function findLatestEmailVerificationCode(email: string) {

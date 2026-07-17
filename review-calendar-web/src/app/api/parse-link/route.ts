@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { toClientMessage } from "@/lib/errors";
 import { parseCampaignContent } from "@/lib/parsers";
 
 export const runtime = "nodejs";
@@ -25,12 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json(parsed);
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "링크 파싱 중 오류가 발생했어요.",
-      },
+      { message: toClientMessage(error, "링크 파싱 중 오류가 발생했어요.") },
       { status: 400 },
     );
   }

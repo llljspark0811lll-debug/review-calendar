@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { deleteCampaign } from "@/lib/db";
+import { toClientMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -24,12 +25,7 @@ export async function DELETE(
     });
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "체험단 삭제 중 오류가 발생했어요.",
-      },
+      { message: toClientMessage(error, "체험단 삭제 중 오류가 발생했어요.") },
       { status: 400 },
     );
   }

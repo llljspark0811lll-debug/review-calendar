@@ -1,3 +1,4 @@
+import { UserFacingError } from "@/lib/errors";
 import type { ParsedCampaign } from "@/lib/parsers/types";
 
 type ReviewNoteCampaignResponse = {
@@ -23,13 +24,13 @@ type ReviewNoteCampaignResponse = {
 
 function formatDateString(input: string | undefined | null, dayOffset = 0) {
   if (!input) {
-    throw new Error("체험단 일정 정보를 확인하지 못했어요.");
+    throw new UserFacingError("체험단 일정 정보를 확인하지 못했어요.");
   }
 
   const date = new Date(input);
 
   if (Number.isNaN(date.getTime())) {
-    throw new Error("체험단 날짜 형식이 올바르지 않아요.");
+    throw new UserFacingError("체험단 날짜 형식이 올바르지 않아요.");
   }
 
   date.setDate(date.getDate() + dayOffset);
@@ -354,7 +355,7 @@ export function parseReviewNoteCampaignHtml(
   const deadline = computeEventRange(segments, "마감", columnWidthPx);
 
   if (!experiencePeriod) {
-    throw new Error(
+    throw new UserFacingError(
       "리뷰노트 체험단 일정을 확인하지 못했어요. 체험단 일정 캘린더가 포함되도록 페이지 전체를 다시 복사해서 붙여넣어 주세요.",
     );
   }
@@ -398,13 +399,13 @@ export async function parseReviewNoteCampaign(
   );
 
   if (response.status === 401 || response.status === 403) {
-    throw new Error(
+    throw new UserFacingError(
       "리뷰노트는 로그인 없이 상세 정보를 제공하지 않아 자동 등록할 수 없어요. 현재는 강남맛집처럼 공개 상세 정보가 열려 있는 링크만 자동 등록할 수 있어요.",
     );
   }
 
   if (!response.ok) {
-    throw new Error(
+    throw new UserFacingError(
       "리뷰노트 상세 정보를 불러오지 못했어요. 링크가 올바른지 확인해 주세요.",
     );
   }

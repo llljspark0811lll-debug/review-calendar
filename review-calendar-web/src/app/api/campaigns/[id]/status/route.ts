@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { findCampaignById, updateCampaignStatus } from "@/lib/db";
+import { toClientMessage } from "@/lib/errors";
 import type { CampaignStatus } from "@/types/campaign";
 
 export const runtime = "nodejs";
@@ -86,12 +87,7 @@ export async function PATCH(
     });
   } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "\uc0c1\ud0dc \ubcc0\uacbd \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc5b4\uc694.",
-      },
+      { message: toClientMessage(error, "\uc0c1\ud0dc \ubcc0\uacbd \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc5b4\uc694.") },
       { status: 400 },
     );
   }
