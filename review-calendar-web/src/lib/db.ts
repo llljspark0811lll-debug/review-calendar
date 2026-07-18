@@ -313,6 +313,34 @@ export async function findUserByUsername(username: string) {
   return rows[0];
 }
 
+export async function findUserById(id: string) {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql<UserRow[]>`
+    ${sql.unsafe(userSelect)}
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+
+  return rows[0];
+}
+
+export async function updateUserEmail(id: string, email: string) {
+  await ensureSchema();
+  const sql = getSql();
+
+  await sql`
+    UPDATE users SET email = ${email.toLowerCase()} WHERE id = ${id}
+  `;
+}
+
+export async function deleteUser(id: string) {
+  await ensureSchema();
+  const sql = getSql();
+
+  await sql`DELETE FROM users WHERE id = ${id}`;
+}
+
 export async function insertUser(input: {
   id: string;
   username: string;

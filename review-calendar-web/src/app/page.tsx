@@ -337,6 +337,18 @@ export default function Home() {
   const [activeCheckpointId, setActiveCheckpointId] =
     useState<CheckpointCardData["id"] | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isEditingSettingsEmail, setIsEditingSettingsEmail] = useState(false);
+  const [settingsEmailValue, setSettingsEmailValue] = useState("");
+  const [settingsEmailCode, setSettingsEmailCode] = useState("");
+  const [settingsEmailCodeMessage, setSettingsEmailCodeMessage] = useState("");
+  const [isSettingsEmailCodePending, setIsSettingsEmailCodePending] = useState(false);
+  const [settingsCurrentPassword, setSettingsCurrentPassword] = useState("");
+  const [settingsErrorMessage, setSettingsErrorMessage] = useState("");
+  const [settingsSuccessMessage, setSettingsSuccessMessage] = useState("");
+  const [isSettingsPending, setIsSettingsPending] = useState(false);
+  const [isDeleteAccountPending, setIsDeleteAccountPending] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [activeDateCell, setActiveDateCell] = useState<CalendarCell | null>(null);
   const [pasteContent, setPasteContent] = useState("");
   const [companyPhoneValue, setCompanyPhoneValue] = useState("");
@@ -740,6 +752,189 @@ export default function Home() {
     setCampaigns([]);
     setHolidays([]);
     setSelectedId(null);
+  }
+
+  function openSettingsModal() {
+    setSettingsEmailValue(currentUser?.email ?? "");
+    setIsEditingSettingsEmail(false);
+    setSettingsEmailCode("");
+    setSettingsEmailCodeMessage("");
+    setSettingsCurrentPassword("");
+    setSettingsErrorMessage("");
+    setSettingsSuccessMessage("");
+    setIsSettingsModalOpen(true);
+  }
+
+  function closeSettingsModal() {
+    setIsSettingsModalOpen(false);
+    setIsEditingSettingsEmail(false);
+    setSettingsEmailValue("");
+    setSettingsEmailCode("");
+    setSettingsEmailCodeMessage("");
+    setSettingsCurrentPassword("");
+    setSettingsErrorMessage("");
+    setSettingsSuccessMessage("");
+    setIsDeleteConfirmOpen(false);
+  }
+
+  async function handleSendSettingsEmailCode() {
+    setSettingsEmailCodeMessage("");
+    setSettingsErrorMessage("");
+
+    if (!currentUser) {
+      return;
+    }
+
+    const nextEmail = settingsEmailValue.trim();
+
+    if (!nextEmail || nextEmail === currentUser.email) {
+      setSettingsErrorMessage("변경할 이메일을 입력해 주세요.");
+      return;
+    }
+
+    setIsSettingsEmailCodePending(true);
+
+    try {
+      const response = await fetch("/api/auth/send-email-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: nextEmail }),
+      });
+      const result = await readApiJson<{ message?: string; devCode?: string }>(
+        response,
+        "인증번호 발송 중 문제가 생겼어요.",
+      );
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "인증번호 발송 중 문제가 생겼어요.");
+      }
+
+      setSettingsEmailCodeMessage(
+        result.devCode
+          ? `${result.message} 인증번호: ${result.devCode}`
+          : (result.message ?? "인증번호를 이메일로 보냈어요."),
+      );
+    } catch (error) {
+      setSettingsEmailCodeMessage(
+        error instanceof Error ? error.message : "인증번호 발송 중 문제가 생겼어요.",
+      );
+    } finally {
+      setIsSettingsEmailCodePending(false);
+    }
+  }
+
+  async function handleSaveSettings() {
+    setSettingsErrorMessage("");
+    setSettingsSuccessMessage("");
+
+    if (!currentUser) {
+      return;
+    }
+
+    const nextEmail = settingsEmailValue.trim();
+
+    if (!isEditingSettingsEmail || nextEmail === currentUser.email) {
+      setSettingsErrorMessage("변경할 이메일을 입력해 주세요.");
+      return;
+    }
+
+    if (!settingsCurrentPassword) {
+      setSettingsErrorMessage("현재 비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    if (!settingsEmailCode.trim()) {
+      setSettingsErrorMessage("새 이메일로 받은 인증번호를 입력해 주세요.");
+      return;
+    }
+
+    setIsSettingsPending(true);
+
+    try {
+      const response = await fetch("/api/auth/email", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: nextEmail,
+          currentPassword: settingsCurrentPassword,
+          emailCode: settingsEmailCode,
+        }),
+      });
+      const result = await readApiJson<{ email?: string; message?: string }>(
+        response,
+        "이메일 변경 중 문제가 생겼어요.",
+      );
+
+      if (!response.ok || !result.email) {
+        throw new Error(result.message ?? "이메일 변경 중 문제가 생겼어요.");
+      }
+
+      setCurrentUser({ ...currentUser, email: result.email });
+      setSettingsEmailValue(result.email);
+      setIsEditingSettingsEmail(false);
+      setSettingsEmailCode("");
+      setSettingsEmailCodeMessage("");
+      setSettingsCurrentPassword("");
+      setSettingsSuccessMessage("관리자 복구 이메일을 변경했어요.");
+    } catch (error) {
+      setSettingsErrorMessage(
+        error instanceof Error ? error.message : "이메일 변경 중 문제가 생겼어요.",
+      );
+    } finally {
+      setIsSettingsPending(false);
+    }
+  }
+
+  function handleRequestDeleteAccount() {
+    setSettingsErrorMessage("");
+    setSettingsSuccessMessage("");
+
+    if (!settingsCurrentPassword) {
+      setSettingsErrorMessage("계정 탈퇴를 위해 현재 비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    setIsDeleteConfirmOpen(true);
+  }
+
+  async function confirmDeleteAccount() {
+    setIsDeleteAccountPending(true);
+
+    try {
+      const response = await fetch("/api/auth/delete-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ currentPassword: settingsCurrentPassword }),
+      });
+      const result = await readApiJson<{ ok?: boolean; message?: string }>(
+        response,
+        "계정 탈퇴 중 문제가 생겼어요.",
+      );
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message ?? "계정 탈퇴 중 문제가 생겼어요.");
+      }
+
+      setIsDeleteConfirmOpen(false);
+      closeSettingsModal();
+      setCurrentUser(null);
+      setCampaigns([]);
+      setHolidays([]);
+      setSelectedId(null);
+    } catch (error) {
+      setIsDeleteConfirmOpen(false);
+      setSettingsErrorMessage(
+        error instanceof Error ? error.message : "계정 탈퇴 중 문제가 생겼어요.",
+      );
+    } finally {
+      setIsDeleteAccountPending(false);
+    }
   }
 
   function openRegisterModal() {
@@ -1289,6 +1484,63 @@ export default function Home() {
                         로그아웃
                       </button>
                     </div>
+
+                    <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex min-w-[84px] items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                      >
+                        사용가이드
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex min-w-[84px] items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                      >
+                        문의/요청
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openSettingsModal}
+                        aria-label="설정"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="7.5"
+                            stroke="currentColor"
+                            strokeWidth="2.6"
+                            strokeDasharray="1.6 2.4"
+                            strokeLinecap="round"
+                          />
+                          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="인스타그램"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.8" />
+                          <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
+                          <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1807,6 +2059,232 @@ export default function Home() {
                 className="min-w-[160px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isPending ? "등록 중..." : "등록하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isSettingsModalOpen && currentUser ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
+          <div className="max-h-[min(88vh,980px)] w-full max-w-lg overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
+                  개인 설정
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-[#8f315f] sm:text-3xl">
+                  계정 정보를 변경하세요
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
+                  관리자 복구 이메일을 변경할 수 있어요. 안전한 변경을 위해 새
+                  이메일 인증번호 확인과 현재 비밀번호 확인이 필요해요.
+                </p>
+              </div>
+              <button
+                onClick={closeSettingsModal}
+                className="min-w-[88px] shrink-0 whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)]"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
+              <label className="block text-sm font-black text-[#b94a81]">
+                계정 아이디
+              </label>
+              <input
+                value={currentUser.username}
+                disabled
+                className="mt-3 w-full cursor-not-allowed rounded-[20px] border border-[#ffd3e6] bg-[#fff1f8] px-4 py-4 text-sm font-bold text-[#b3688e] outline-none"
+              />
+
+              <label className="mt-5 block text-sm font-black text-[#b94a81]">
+                관리자 복구 이메일
+              </label>
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  value={settingsEmailValue}
+                  onChange={(event) => {
+                    setSettingsEmailValue(event.target.value);
+                    setSettingsEmailCode("");
+                    setSettingsEmailCodeMessage("");
+                  }}
+                  readOnly={!isEditingSettingsEmail}
+                  placeholder="가입할 때 등록한 이메일이에요"
+                  inputMode="email"
+                  className={`min-w-0 flex-1 rounded-[20px] border px-4 py-4 text-sm text-[#7f355b] outline-none transition ${
+                    isEditingSettingsEmail
+                      ? "border-[#ff93c4] bg-[#fff8fc] focus:ring-2 focus:ring-[#ffd3e6]"
+                      : "cursor-default border-[#ffd3e6] bg-[#fff8fc]"
+                  }`}
+                />
+                {isEditingSettingsEmail ? (
+                  <button
+                    type="button"
+                    onClick={handleSendSettingsEmailCode}
+                    disabled={isSettingsEmailCodePending}
+                    className="min-w-[104px] shrink-0 whitespace-nowrap rounded-full bg-[#fff0f7] px-4 py-3 text-xs font-black text-[#c45991] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSettingsEmailCodePending ? "발송 중" : "인증번호 발송"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingSettingsEmail(true)}
+                    className="min-w-[72px] shrink-0 whitespace-nowrap rounded-full bg-[#fff0f7] px-4 py-3 text-sm font-bold text-[#c45991]"
+                  >
+                    변경
+                  </button>
+                )}
+              </div>
+              {isEditingSettingsEmail && settingsEmailCodeMessage ? (
+                <p className="mt-2 text-xs font-bold text-[#b45b88]">
+                  {settingsEmailCodeMessage}
+                </p>
+              ) : null}
+
+              {isEditingSettingsEmail ? (
+                <>
+                  <label className="mt-5 block text-sm font-black text-[#b94a81]">
+                    인증번호
+                  </label>
+                  <input
+                    value={settingsEmailCode}
+                    onChange={(event) => setSettingsEmailCode(event.target.value)}
+                    placeholder="새 이메일로 받은 6자리 인증번호"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className="mt-3 w-full rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
+                  />
+                </>
+              ) : null}
+
+              <label className="mt-5 block text-sm font-black text-[#b94a81]">
+                현재 비밀번호
+              </label>
+              <input
+                type="password"
+                value={settingsCurrentPassword}
+                onChange={(event) => setSettingsCurrentPassword(event.target.value)}
+                placeholder="현재 로그인 비밀번호를 입력해 주세요"
+                className="mt-3 w-full rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
+              />
+
+              {settingsErrorMessage ? (
+                <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
+                  {settingsErrorMessage}
+                </p>
+              ) : null}
+              {settingsSuccessMessage ? (
+                <p className="mt-3 rounded-[18px] bg-[#e5f6e9] px-4 py-3 text-sm font-bold text-[#357a4a]">
+                  {settingsSuccessMessage}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                onClick={closeSettingsModal}
+                className="min-w-[96px] whitespace-nowrap rounded-full bg-white px-5 py-3 text-sm font-bold text-[#c55a90] shadow-[0_12px_22px_rgba(255,190,219,0.3)]"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                disabled={isSettingsPending}
+                className="min-w-[140px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSettingsPending ? "저장 중..." : "변경 저장"}
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-[26px] border border-[#ffc9dc] bg-[#fff1f4] p-5">
+              <p className="text-sm font-black text-[#c23b5b]">계정 탈퇴</p>
+              <p className="mt-1 text-xs leading-6 text-[#a8657b]">
+                탈퇴하면 계정과 등록된 체험단 데이터가 모두 영구 삭제되며 복구할 수
+                없어요.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={handleRequestDeleteAccount}
+                  disabled={isDeleteAccountPending}
+                  className="min-w-[96px] shrink-0 whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c23b5b] shadow-[0_10px_18px_rgba(255,190,219,0.25)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeleteAccountPending ? "처리 중..." : "탈퇴하기"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isDeleteConfirmOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#7d3159]/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[32px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,238,244,0.96))] p-6 text-center shadow-[0_30px_70px_rgba(210,89,151,0.3)]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#ffe0e6]">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-7 w-7 text-[#e0435f]"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 9v4.5M12 17h.01M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78A1.5 1.5 0 0 0 22.18 18L13.71 3.86a1.5 1.5 0 0 0-2.42 0Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            <h3 className="mt-4 text-xl font-black text-[#7f2a44]">
+              정말로 탈퇴하시겠어요?
+            </h3>
+            <p className="mt-1 text-sm font-bold text-[#c23b5b]">
+              이 작업은 되돌릴 수 없어요
+            </p>
+
+            <div className="mt-4 rounded-[22px] border border-[#ffc9dc] bg-[#fff1f4] p-4 text-left">
+              <p className="text-xs font-black tracking-[0.08em] text-[#c23b5b]">
+                삭제되는 데이터
+              </p>
+              <ul className="mt-2 grid gap-1.5 text-sm font-bold text-[#8a5d75]">
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0435f]" />
+                  계정 정보 및 로그인 세션
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0435f]" />
+                  등록된 체험단 전체
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0435f]" />
+                  확정된 일정과 리뷰 마감일 기록
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0435f]" />
+                  관리자 복구 이메일 등 계정 설정
+                </li>
+              </ul>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isDeleteAccountPending}
+                className="flex-1 whitespace-nowrap rounded-full bg-white px-4 py-3 text-sm font-bold text-[#c55a90] shadow-[0_10px_18px_rgba(255,190,219,0.3)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmDeleteAccount}
+                disabled={isDeleteAccountPending}
+                className="flex-1 whitespace-nowrap rounded-full bg-[#e0435f] px-4 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(224,67,95,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeleteAccountPending ? "처리 중..." : "계속 진행"}
               </button>
             </div>
           </div>
