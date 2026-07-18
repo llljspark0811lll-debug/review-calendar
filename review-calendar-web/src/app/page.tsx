@@ -1258,7 +1258,9 @@ export default function Home() {
                           체험단 등록
                         </span>
                         <span className="mt-5 block max-w-[220px] text-base leading-7 text-white/92">
-                          선정된 체험단 링크를 등록하고 일정을 바로 불러오세요
+                          선정된 체험단 페이지를 붙여넣고
+                          <br />
+                          체험정보를 바로 불러오세요
                         </span>
                       </div>
                       <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-white/18">
@@ -1291,7 +1293,7 @@ export default function Home() {
                 </div>
               </div>
               <p className="mt-6 text-2xl font-black leading-snug text-[#e36aa6] sm:text-3xl">
-                선정된 체험단 링크를 등록하면 일정과 마감일을 한 번에 관리할 수 있어요
+                선정된 체험단 페이지를 붙여넣으면 일정과 마감일을 한 번에 관리할 수 있어요
               </p>
             </div>
           </div>
@@ -1482,10 +1484,10 @@ export default function Home() {
                         </span>
                       )}
                       <span
-                        className={`inline-flex items-center justify-center text-lg font-black sm:text-xl ${
+                        className={`inline-flex items-center justify-center text-lg font-black sm:text-xl ${dayNumberTone} ${
                           isToday
-                            ? "h-7 w-7 rounded-full border-2 border-[#ff5ea3] bg-white/90 text-[#ff5ea3] sm:h-8 sm:w-8"
-                            : dayNumberTone
+                            ? "h-7 w-7 rounded-full border-2 border-current bg-white/90 sm:h-8 sm:w-8"
+                            : ""
                         }`}
                       >
                         {cell.day}
@@ -2271,9 +2273,6 @@ function CampaignListSection({
               className={`rounded-[34px] bg-gradient-to-r ${campaign.accent} p-[1px] text-left shadow-[0_22px_34px_rgba(255,173,211,0.28)] transition-transform hover:-translate-y-1`}
             >
               <div className="relative overflow-hidden rounded-[33px] bg-white/92 p-5">
-                <div className="absolute right-4 top-4 rotate-6 rounded-full bg-[#fff1f8] px-3 py-1 text-xs font-black text-[#cc558f] shadow-[0_8px_18px_rgba(255,204,229,0.35)]">
-                  {campaign.sticker}
-                </div>
                 {layout === "selected" ? (
                   <div>
                     <div className="flex flex-wrap gap-2">
@@ -2318,7 +2317,7 @@ function CampaignListSection({
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="pr-16">
+                    <div>
                       <div className="flex flex-wrap gap-2">
                         <Badge>{campaign.site}</Badge>
                         <Badge tone="yellow">{statusLabel(campaign.status)}</Badge>
