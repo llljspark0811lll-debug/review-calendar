@@ -115,3 +115,121 @@ button {
   background: #ff95c6;
   color: #fff;
 }
+
+/*
+ * 온보딩 튜토리얼의 예시 페이지 카드에서 "Ctrl+A로 전체 선택 → Ctrl+C 복사"
+ * 과정을 실제 브라우저 텍스트 선택처럼 흉내내는 반복 애니메이션. 각 줄이
+ * 왼쪽에서 오른쪽으로 하이라이트되며 실제 드래그 선택처럼 보이게 한다.
+ */
+@keyframes onboarding-select-sweep {
+  0%,
+  8% {
+    background-position: 100% 0;
+  }
+  38%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+/* Ctrl+A → Ctrl+C → Ctrl+V 배지가 한 루프 안에서 순서대로 나타났다 사라진다. */
+@keyframes onboarding-key-badge-a {
+  0%,
+  4% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  10%,
+  28% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  34%,
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes onboarding-key-badge-c {
+  0%,
+  36% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  42%,
+  56% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  62%,
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes onboarding-key-badge-v {
+  0%,
+  64% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  70%,
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+.onboarding-select-line {
+  background-image: linear-gradient(90deg, #ffcfe4 50%, transparent 50%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: onboarding-select-sweep 3.6s ease-in-out infinite;
+}
+
+.onboarding-select-line-2 {
+  animation-delay: 0.12s;
+}
+
+.onboarding-select-line-3 {
+  animation-delay: 0.24s;
+}
+
+.onboarding-select-line-4 {
+  animation-delay: 0.36s;
+}
+
+.onboarding-select-line-5 {
+  animation-delay: 0.48s;
+}
+
+.onboarding-select-line-6 {
+  animation-delay: 0.6s;
+}
+
+.onboarding-select-line-7 {
+  animation-delay: 0.72s;
+}
+
+.onboarding-key-badge {
+  opacity: 0;
+}
+
+.onboarding-key-badge-a {
+  animation: onboarding-key-badge-a 3.6s ease-in-out infinite;
+}
+
+.onboarding-key-badge-c {
+  animation: onboarding-key-badge-c 3.6s ease-in-out infinite;
+}
+
+.onboarding-key-badge-v {
+  animation: onboarding-key-badge-v 3.6s ease-in-out infinite;
+}

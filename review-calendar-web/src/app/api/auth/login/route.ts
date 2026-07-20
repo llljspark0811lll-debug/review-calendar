@@ -56,6 +56,7 @@ export async function POST(request: Request) {
         email: userWithPassword.email,
         name: userWithPassword.name,
         createdAt: userWithPassword.createdAt,
+        onboardingCompletedAt: userWithPassword.onboardingCompletedAt,
       },
     });
   } catch (error) {

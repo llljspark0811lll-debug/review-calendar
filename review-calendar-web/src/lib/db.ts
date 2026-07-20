@@ -9,6 +9,7 @@ export type AppUser = {
   email: string;
   name: string;
   createdAt: string;
+  onboardingCompletedAt: string | null;
 };
 
 type UserRow = {
@@ -18,6 +19,7 @@ type UserRow = {
   name: string;
   passwordHash: string;
   createdAt: string;
+  onboardingCompletedAt: string | null;
 };
 
 type EmailVerificationCodeRow = {
@@ -123,6 +125,21 @@ async function ensureSchema() {
         CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx
         ON users(username)
         WHERE username IS NOT NULL
+      `;
+
+      await sql`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS onboarding_completed_at TEXT
+      `;
+
+      // 이 컬럼이 생기기 전에 가입한 계정은 강제 튜토리얼 대상이 아니므로,
+      // 배포 시점 이전 가입자만 완료 처리된 것으로 소급 처리한다. 이 시점
+      // 이후 가입하는(온보딩 컬럼이 NULL인) 계정만 실제로 튜토리얼을 보게 된다.
+      await sql`
+        UPDATE users
+        SET onboarding_completed_at = created_at
+        WHERE onboarding_completed_at IS NULL
+          AND created_at < '2026-07-20T00:00:00.000Z'
       `;
 
       await sql`
@@ -275,6 +292,7 @@ function mapUser(row: UserRow): AppUser {
     email: row.email,
     name: row.name,
     createdAt: row.createdAt,
+    onboardingCompletedAt: row.onboardingCompletedAt,
   };
 }
 
@@ -285,7 +303,8 @@ const userSelect = `
     email,
     name,
     password_hash AS "passwordHash",
-    created_at AS "createdAt"
+    created_at AS "createdAt",
+    onboarding_completed_at AS "onboardingCompletedAt"
   FROM users
 `;
 
@@ -363,6 +382,7 @@ export async function insertUser(input: {
     email: input.email.toLowerCase(),
     name: input.name,
     createdAt,
+    onboardingCompletedAt: null,
   };
 }
 
@@ -391,7 +411,8 @@ export async function findUserBySessionTokenHash(tokenHash: string) {
       users.email,
       users.name,
       users.password_hash AS "passwordHash",
-      users.created_at AS "createdAt"
+      users.created_at AS "createdAt",
+      users.onboarding_completed_at AS "onboardingCompletedAt"
     FROM user_sessions
     INNER JOIN users ON users.id = user_sessions.user_id
     WHERE user_sessions.token_hash = ${tokenHash}
@@ -407,6 +428,17 @@ export async function deleteUserSessionByTokenHash(tokenHash: string) {
   const sql = getSql();
 
   await sql`DELETE FROM user_sessions WHERE token_hash = ${tokenHash}`;
+}
+
+export async function completeUserOnboarding(id: string) {
+  await ensureSchema();
+  const sql = getSql();
+
+  await sql`
+    UPDATE users
+    SET onboarding_completed_at = ${new Date().toISOString()}
+    WHERE id = ${id}
+  `;
 }
 
 export async function insertEmailVerificationCode(input: {

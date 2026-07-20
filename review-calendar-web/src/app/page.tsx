@@ -3,8 +3,10 @@
 import {
   type ClipboardEvent,
   type FormEvent,
+  type MouseEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -26,6 +28,7 @@ type AppUser = {
   email: string;
   name: string;
   createdAt: string;
+  onboardingCompletedAt: string | null;
 };
 type AuthMode = "login" | "register";
 type ParsedCampaignPreview = Omit<Campaign, "id" | "companyPhone" | "contactLocked">;
@@ -130,6 +133,42 @@ function formatDateTime(dateString: string | null) {
 
 function formatIsoDate(year: number, month: number, day: number) {
   return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
+}
+
+function buildOnboardingDemoPreview(): ParsedCampaignPreview {
+  const today = new Date();
+  const toIsoAfter = (days: number) => {
+    const date = new Date(today);
+    date.setDate(date.getDate() + days);
+    return formatIsoDate(date.getFullYear(), date.getMonth() + 1, date.getDate());
+  };
+
+  return {
+    title: "[튜토리얼] 부산 해운대 카페",
+    site: "리뷰노트",
+    reward: "아메리카노 2잔 무료 체험",
+    status: "unscheduled",
+    detailUrl: "https://www.reviewnote.co.kr/",
+    experienceStartDate: toIsoAfter(3),
+    experienceEndDate: toIsoAfter(7),
+    reviewDeadline: toIsoAfter(10),
+    selectedDate: null,
+    capacity: "미정",
+    companyName: "해운대 카페 (예시)",
+    address: "부산 해운대구 구청로 12 (예시 주소)",
+    memo: [
+      "방문 및 예약 안내",
+      "평일 14시~17시 방문 가능, 예약은 인스타그램 DM으로 안내",
+      "",
+      "키워드 정보",
+      "해운대카페 | 감성카페 | 오션뷰맛집",
+      "",
+      "체험단 미션",
+      "사진 5장 이상 포함, 솔직한 후기 800자 이상 작성",
+    ].join("\n"),
+    sticker: "리뷰노트",
+    accent: "from-[#ffa1cb] via-[#ffd0e4] to-[#fff0f7]",
+  };
 }
 
 function formatShortDate(iso: string) {
@@ -349,6 +388,20 @@ export default function Home() {
   const [isSettingsPending, setIsSettingsPending] = useState(false);
   const [isDeleteAccountPending, setIsDeleteAccountPending] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [onboardingStage, setOnboardingStage] = useState<
+    "spotlight" | "tutorial" | "complete" | null
+  >(null);
+  const [isOnboardingFinishing, setIsOnboardingFinishing] = useState(false);
+  const [onboardingCampaignId, setOnboardingCampaignId] = useState<string | null>(null);
+  const registerButtonRef = useRef<HTMLButtonElement>(null);
+  const onboardingPreviewCardRef = useRef<HTMLDivElement>(null);
+  const onboardingPhoneInputRef = useRef<HTMLInputElement>(null);
+  const [spotlightRect, setSpotlightRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [activeDateCell, setActiveDateCell] = useState<CalendarCell | null>(null);
   const [pasteContent, setPasteContent] = useState("");
   const [companyPhoneValue, setCompanyPhoneValue] = useState("");
@@ -534,7 +587,12 @@ export default function Home() {
           return;
         }
 
-        setCurrentUser(response.ok ? (result.user ?? null) : null);
+        const user = response.ok ? (result.user ?? null) : null;
+        setCurrentUser(user);
+
+        if (user && !user.onboardingCompletedAt) {
+          setOnboardingStage("spotlight");
+        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -551,6 +609,57 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (onboardingStage !== "spotlight") {
+      return;
+    }
+
+    function measure() {
+      const el = registerButtonRef.current;
+
+      if (!el) {
+        return;
+      }
+
+      const rect = el.getBoundingClientRect();
+      setSpotlightRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    }
+
+    measure();
+    document.body.style.overflow = "hidden";
+    window.addEventListener("resize", measure);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("resize", measure);
+      setSpotlightRect(null);
+    };
+  }, [onboardingStage]);
+
+  useEffect(() => {
+    if (onboardingStage !== "tutorial" || !parsePreview) {
+      return;
+    }
+
+    onboardingPreviewCardRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+
+    const focusTimer = setTimeout(() => {
+      onboardingPhoneInputRef.current?.focus();
+    }, 450);
+
+    return () => {
+      clearTimeout(focusTimer);
+    };
+  }, [onboardingStage, parsePreview]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -657,6 +766,11 @@ export default function Home() {
 
       setIsBootstrapLoading(true);
       setCurrentUser(result.user);
+
+      if (!result.user.onboardingCompletedAt) {
+        setOnboardingStage("spotlight");
+      }
+
       setAuthUsername("");
       setAuthEmail("");
       setAuthPassword("");
@@ -946,6 +1060,15 @@ export default function Home() {
     setIsRegisterModalOpen(true);
   }
 
+  function handleRegisterButtonClick() {
+    if (onboardingStage === "spotlight") {
+      startOnboardingTutorial();
+      return;
+    }
+
+    openRegisterModal();
+  }
+
   function closeRegisterModal() {
     setPasteContent("");
     setCompanyPhoneValue("");
@@ -1037,13 +1160,61 @@ export default function Home() {
           nextCampaigns[0];
 
         setSelectedId(nextCampaign?.id ?? null);
-        closeRegisterModal();
+
+        if (onboardingStage === "tutorial") {
+          setOnboardingCampaignId(result.campaign.id);
+          setOnboardingStage("complete");
+        } else {
+          closeRegisterModal();
+        }
       } catch (error) {
         setRegisterErrorMessage(
           error instanceof Error ? error.message : "체험단 등록 중 문제가 생겼어요.",
         );
       }
     });
+  }
+
+  function startOnboardingTutorial() {
+    setPasteContent("");
+    setCompanyPhoneValue("");
+    setRegisterErrorMessage("");
+    setParsePreview(null);
+    setIsParsingPreview(false);
+    setOnboardingCampaignId(null);
+    setOnboardingStage("tutorial");
+    setIsRegisterModalOpen(true);
+  }
+
+  function fillOnboardingDemoPreview() {
+    setRegisterErrorMessage("");
+    setPasteContent("붙여넣음 ✓ (예시 페이지)");
+    setParsePreview(buildOnboardingDemoPreview());
+  }
+
+  async function finishOnboardingTutorial() {
+    setIsOnboardingFinishing(true);
+
+    try {
+      if (onboardingCampaignId) {
+        await fetch(`/api/campaigns/${onboardingCampaignId}`, { method: "DELETE" });
+        setCampaigns((current) =>
+          current.filter((campaign) => campaign.id !== onboardingCampaignId),
+        );
+        setSelectedId((current) => (current === onboardingCampaignId ? null : current));
+      }
+
+      await fetch("/api/auth/onboarding-complete", { method: "POST" });
+
+      setCurrentUser((current) =>
+        current ? { ...current, onboardingCompletedAt: new Date().toISOString() } : current,
+      );
+    } finally {
+      setIsOnboardingFinishing(false);
+      setOnboardingStage(null);
+      setOnboardingCampaignId(null);
+      closeRegisterModal();
+    }
   }
 
   function handleCalendarDatePick(cell: CalendarCell) {
@@ -1429,6 +1600,12 @@ export default function Home() {
     );
   }
 
+  const isOnboardingPreviewStep = onboardingStage === "tutorial" && Boolean(parsePreview);
+  const isOnboardingPhoneStep =
+    isOnboardingPreviewStep && !companyPhoneValue.trim();
+  const isOnboardingSubmitStep =
+    isOnboardingPreviewStep && Boolean(companyPhoneValue.trim());
+
   return (
     <main className="review-calendar-app min-h-screen overflow-hidden bg-[linear-gradient(180deg,#ffeaf5_0%,#ffdceb_35%,#ffeaf7_100%)] text-[#7f355b]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.8)_0,rgba(255,255,255,0)_16%),radial-gradient(circle_at_82%_10%,rgba(255,246,190,0.65)_0,rgba(255,246,190,0)_12%),radial-gradient(circle_at_80%_70%,rgba(229,214,255,0.75)_0,rgba(229,214,255,0)_16%),linear-gradient(135deg,rgba(255,255,255,0.14)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.14)_50%,rgba(255,255,255,0.14)_75%,transparent_75%,transparent)] bg-[length:auto,auto,auto,28px_28px] opacity-80" />
@@ -1441,10 +1618,15 @@ export default function Home() {
           <div className="relative rounded-[38px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,245,250,0.98),rgba(255,238,247,0.88))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-8">
             <div>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,760px)_minmax(280px,1fr)] xl:items-start">
-                <div className="grid gap-4">
+                <div className="relative grid gap-4">
                   <button
-                    onClick={openRegisterModal}
-                    className="relative min-h-[190px] overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] px-7 py-8 text-left text-white shadow-[0_24px_42px_rgba(239,139,192,0.34)] transition-transform hover:-translate-y-1"
+                    ref={registerButtonRef}
+                    onClick={handleRegisterButtonClick}
+                    className={`relative min-h-[190px] overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] px-7 py-8 text-left text-white shadow-[0_24px_42px_rgba(239,139,192,0.34)] transition-transform hover:-translate-y-1 ${
+                      onboardingStage === "spotlight"
+                        ? "ring-4 ring-white ring-offset-4 ring-offset-white animate-pulse"
+                        : ""
+                    }`}
                   >
                     <div className="absolute -right-5 -top-5 h-24 w-24 rounded-full bg-white/12" />
                     <div className="relative z-10 flex items-start justify-between gap-5">
@@ -1455,7 +1637,7 @@ export default function Home() {
                         <span className="mt-5 block max-w-[220px] text-base leading-7 text-white/92">
                           선정된 체험단 페이지를 붙여넣고
                           <br />
-                          체험정보를 바로 불러오세요
+                          체험정보를 바로 관리하세요
                         </span>
                       </div>
                       <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-white/18">
@@ -1465,7 +1647,6 @@ export default function Home() {
                       </span>
                     </div>
                   </button>
-
                 </div>
 
                 <div className="flex min-h-[190px] items-start xl:justify-end">
@@ -1488,6 +1669,7 @@ export default function Home() {
                     <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
                       <button
                         type="button"
+                        onClick={() => setOnboardingStage("spotlight")}
                         className="inline-flex min-w-[84px] items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
                       >
                         사용가이드
@@ -1951,116 +2133,354 @@ export default function Home() {
         ) : null}
       </div>
 
+      {onboardingStage === "spotlight" && spotlightRect ? (
+        <>
+          {(() => {
+            const padding = 12;
+            const holeTop = spotlightRect.top - padding;
+            const holeLeft = spotlightRect.left - padding;
+            const holeRight = spotlightRect.left + spotlightRect.width + padding;
+            const holeBottom = spotlightRect.top + spotlightRect.height + padding;
+            const stripClass = "fixed z-[65] bg-[#3d1a2e]/55 backdrop-blur-[1px]";
+            const blockClick = (event: MouseEvent<HTMLDivElement>) =>
+              event.stopPropagation();
+
+            return (
+              <>
+                <div
+                  className={stripClass}
+                  style={{ top: 0, left: 0, right: 0, height: Math.max(holeTop, 0) }}
+                  onClick={blockClick}
+                />
+                <div
+                  className={stripClass}
+                  style={{ top: holeBottom, left: 0, right: 0, bottom: 0 }}
+                  onClick={blockClick}
+                />
+                <div
+                  className={stripClass}
+                  style={{
+                    top: holeTop,
+                    left: 0,
+                    width: Math.max(holeLeft, 0),
+                    height: holeBottom - holeTop,
+                  }}
+                  onClick={blockClick}
+                />
+                <div
+                  className={stripClass}
+                  style={{ top: holeTop, left: holeRight, right: 0, height: holeBottom - holeTop }}
+                  onClick={blockClick}
+                />
+              </>
+            );
+          })()}
+
+          <div
+            className="pointer-events-none fixed z-[70] w-full max-w-[320px]"
+            style={{
+              top: spotlightRect.top + spotlightRect.height + 24,
+              left: spotlightRect.left + spotlightRect.width / 2,
+              transform: "translateX(-50%)",
+            }}
+          >
+            <div className="mx-auto w-fit rounded-[20px] bg-white px-4 py-3 text-center text-sm font-bold text-[#7f355b] shadow-[0_16px_28px_rgba(125,49,89,0.35)]">
+              여기를 눌러서 체험단을 한 번 등록해보세요!
+              <br />
+              <span className="text-xs font-medium text-[#b3688e]">
+                처음 한 번은 예시로 등록 과정을 안내해드려요
+              </span>
+            </div>
+          </div>
+        </>
+      ) : null}
+
       {isRegisterModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
           <div className="max-h-[min(88vh,980px)] w-full max-w-2xl overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
-                  체험단 등록하기
-                </p>
-                <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
-                  선정된 체험단 페이지 붙여넣기
-                </h2>
-                <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-                  선정된 체험단 페이지를 열고 전체 복사해서 붙여넣으면 체험단명,
-                  체험 기간, 리뷰 마감일 같은 정보를 자동으로 채워줘요.
-                </p>
-              </div>
-              <button
-                onClick={closeRegisterModal}
-                className="min-w-[88px] whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)]"
-              >
-                닫기
-              </button>
-            </div>
-
-            <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
-              <ol className="grid gap-1 text-xs font-bold text-[#b3688e]">
-                <li>1. 선정된 체험단 페이지 열기</li>
-                <li>2. 페이지 전체 선택 (Ctrl+A)</li>
-                <li>3. 복사 (Ctrl+C)</li>
-                <li>4. 아래에 붙여넣기 (Ctrl+V)</li>
-              </ol>
-
-              <textarea
-                value={pasteContent ? "붙여넣음 ✓" : ""}
-                onChange={() => {}}
-                onPaste={handlePasteCapture}
-                placeholder="여기를 클릭하고 Ctrl+V로 붙여넣어 주세요"
-                className="mt-4 min-h-[96px] w-full resize-none rounded-[20px] border border-dashed border-[#ffb8d8] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition placeholder:text-[#c99bb4] focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
-              />
-
-              {isParsingPreview ? (
-                <p className="mt-3 rounded-[18px] bg-[#fff1f8] px-4 py-3 text-sm font-bold text-[#b3688e]">
-                  체험단 정보를 확인하고 있어요...
-                </p>
-              ) : null}
-
-              {parsePreview ? (
-                <div className="mt-3 rounded-[22px] border border-[#ffd3e6] bg-[#fff8fc] p-4">
-                  <p className="inline-block rounded-full bg-[#ffe1ef] px-3 py-1 text-xs font-black text-[#b3346c]">
-                    {parsePreview.site} 인식 완료 ✓
-                  </p>
-                  <p className="mt-2 text-base font-black text-[#7f355b]">
-                    <CampaignTitle title={parsePreview.title} />
-                  </p>
-                  <p className="mt-1 text-sm text-[#8a5d75]">{parsePreview.reward}</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#8a5d75]">
-                    <div className="rounded-[14px] bg-white/80 px-3 py-2">
-                      <p className="font-bold text-[#b3688e]">체험 기간</p>
-                      <p className="mt-1">
-                        {formatShortDate(parsePreview.experienceStartDate)} ~{" "}
-                        {formatShortDate(parsePreview.experienceEndDate)}
-                      </p>
-                    </div>
-                    <div className="rounded-[14px] bg-white/80 px-3 py-2">
-                      <p className="font-bold text-[#b3688e]">리뷰 마감</p>
-                      <p className="mt-1">{formatShortDate(parsePreview.reviewDeadline)}</p>
-                    </div>
-                    <div className="rounded-[14px] bg-white/80 px-3 py-2">
-                      <p className="font-bold text-[#b3688e]">방문 주소</p>
-                      <p className="mt-1 truncate">{parsePreview.address}</p>
-                    </div>
-                  </div>
+            {onboardingStage === "complete" ? (
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#ffe1ef] text-3xl">
+                  🎉
                 </div>
-              ) : null}
-
-              <label className="mt-4 block text-sm font-black text-[#b94a81]">
-                업체 연락처
-              </label>
-              <input
-                value={companyPhoneValue}
-                onChange={(event) => setCompanyPhoneValue(event.target.value)}
-                placeholder="예) 010-1234-5678 또는 매장 예약번호"
-                className="mt-3 w-full rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
-              />
-              <div className="mt-3 rounded-[20px] bg-[#fff1f8] px-4 py-3 text-xs leading-6 text-[#9a6280]">
-                업체 연락처는 체험단 사이트에서 확인한 예약번호를 직접 입력해 주세요.
-                나머지 정보는 붙여넣은 페이지에서 자동으로 불러와요.
-              </div>
-              {registerErrorMessage ? (
-                <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
-                  {registerErrorMessage}
+                <h2 className="mt-4 text-2xl font-black text-[#8f315f]">
+                  등록 완료! 이렇게 하면 돼요
+                </h2>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[#8a5d75]">
+                  방금 만든 예시 체험단은 자동으로 정리해드릴게요. 이제부터는
+                  실제로 선정된 체험단 페이지를 붙여넣어서 등록해보세요!
                 </p>
-              ) : null}
-            </div>
+                <button
+                  onClick={finishOnboardingTutorial}
+                  disabled={isOnboardingFinishing}
+                  className="mt-6 min-w-[160px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-6 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isOnboardingFinishing ? "정리하는 중..." : "시작하기"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
+                      {onboardingStage === "tutorial" ? "체험단 등록 가이드" : "체험단 등록하기"}
+                    </p>
+                    <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
+                      선정된 체험단 페이지 붙여넣기
+                    </h2>
+                    <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
+                      선정된 체험단 페이지를 열고 전체 복사해서 붙여넣으면 체험단명,
+                      체험 기간, 리뷰 마감일 같은 정보를 자동으로 채워줘요.
+                    </p>
+                  </div>
+                  {onboardingStage !== "tutorial" ? (
+                    <button
+                      onClick={closeRegisterModal}
+                      className="min-w-[88px] whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)]"
+                    >
+                      닫기
+                    </button>
+                  ) : null}
+                </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                onClick={closeRegisterModal}
-                className="min-w-[96px] whitespace-nowrap rounded-full bg-white px-5 py-3 text-sm font-bold text-[#c55a90] shadow-[0_12px_22px_rgba(255,190,219,0.3)]"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleRegisterLink}
-                disabled={isPending || !parsePreview || !companyPhoneValue.trim()}
-                className="min-w-[160px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPending ? "등록 중..." : "등록하기"}
-              </button>
-            </div>
+                {onboardingStage === "tutorial" ? (
+                  <div className="mt-6 rounded-[28px] border-2 border-dashed border-[#ff9fc7] bg-[#fff5fa] p-5">
+                    <p className="text-xs font-black tracking-[0.1em] text-[#c45991]">
+                      처음이시죠? 예시로 등록 과정을 보여드릴게요
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-[#8a5d75]">
+                      실제로는 선정된 체험단 페이지를 열고 전체 선택(Ctrl+A) →
+                      복사(Ctrl+C) → 붙여넣기(Ctrl+V) 하면 돼요. 지금은 예시
+                      페이지로 그 과정을 체험해볼게요.
+                    </p>
+
+                    <div className="mt-3 overflow-hidden rounded-[18px] border border-[#ffd3e6] bg-white shadow-[0_10px_18px_rgba(255,190,219,0.25)]">
+                      <div className="relative flex items-center justify-between gap-2 border-b border-[#ffe4f0] bg-white px-3 py-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-[4px] bg-[linear-gradient(135deg,#4f74d9,#7db9ff)] text-[8px] font-black text-white">
+                            R
+                          </span>
+                          <span className="onboarding-select-line text-[10px] font-black text-[#4f74d9]">
+                            리뷰노트 (예시)
+                          </span>
+                        </div>
+                        <div className="onboarding-select-line onboarding-select-line-2 hidden flex-1 max-w-[110px] truncate rounded-full border border-[#eee] bg-[#fafafa] px-2 py-0.5 text-[8px] text-[#bbb] sm:block">
+                          어떤 체험단을 찾고 있나요?
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="h-4 w-4 rounded-full bg-[#ffe1ef]" />
+                          <span className="onboarding-select-line onboarding-select-line-3 hidden text-[9px] font-bold text-[#b3688e] sm:inline">
+                            OO맘
+                          </span>
+                        </div>
+                        <span className="onboarding-key-badge onboarding-key-badge-a absolute right-3 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-[#ff5ea3] px-2 py-0.5 text-[10px] font-black text-white shadow-[0_4px_10px_rgba(255,94,163,0.45)]">
+                          Ctrl + A 전체 선택
+                        </span>
+                        <span className="onboarding-key-badge onboarding-key-badge-c absolute right-3 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-[#ff5ea3] px-2 py-0.5 text-[10px] font-black text-white shadow-[0_4px_10px_rgba(255,94,163,0.45)]">
+                          Ctrl + C 복사
+                        </span>
+                      </div>
+
+                      <div className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_92px]">
+                        <div className="min-w-0">
+                          <p className="onboarding-select-line onboarding-select-line-4 text-sm font-black text-[#7f355b]">
+                            [리뷰/체험단] 체험단명
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            <span className="onboarding-select-line onboarding-select-line-5 rounded-full bg-[#eef4ff] px-2 py-0.5 text-[9px] font-bold text-[#4f74d9]">
+                              블로그
+                            </span>
+                            <span className="onboarding-select-line onboarding-select-line-6 rounded-full bg-[#eef4ff] px-2 py-0.5 text-[9px] font-bold text-[#4f74d9]">
+                              방문형
+                            </span>
+                            <span className="onboarding-select-line onboarding-select-line-7 rounded-full bg-[#fff3e0] px-2 py-0.5 text-[9px] font-bold text-[#c98a2e]">
+                              맛집
+                            </span>
+                          </div>
+
+                          <div className="onboarding-select-line mt-2 rounded-[10px] bg-[#fff8fc] px-2.5 py-2 text-[9px] leading-4 text-[#b3688e]">
+                            📌 해당 체험단은 <b>방문형</b> 체험단이에요
+                            <br />
+                            STEP1 일정 조율 → STEP2 방문 체험 → STEP3 리뷰 등록
+                          </div>
+
+                          <p className="onboarding-select-line onboarding-select-line-2 mt-2 text-[10px] text-[#9a6280]">
+                            주최자 <span className="font-bold text-[#7f355b]">OO 사장님</span>
+                          </p>
+
+                          <p className="onboarding-select-line onboarding-select-line-3 mt-1 text-[10px] text-[#9a6280]">
+                            제공서비스/물품{" "}
+                            <span className="font-bold text-[#7f355b]">OO원 식사권 ♥</span>
+                          </p>
+
+                          <p className="onboarding-select-line onboarding-select-line-4 mt-1 text-[10px] text-[#9a6280]">
+                            방문 주소{" "}
+                            <span className="font-bold text-[#7f355b]">OO시 OO구 (지도 예시)</span>
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1">
+                          <div className="aspect-square rounded-[8px] bg-[linear-gradient(135deg,#ffd6a8,#ffb86b)]" />
+                          <div className="aspect-square rounded-[8px] bg-[linear-gradient(135deg,#ffe1ef,#ffa1cb)]" />
+                          <div className="aspect-square rounded-[8px] bg-[linear-gradient(135deg,#c7e4ff,#8ec9ff)]" />
+                          <div className="aspect-square rounded-[8px] bg-[linear-gradient(135deg,#e5d6ff,#c9a8ff)]" />
+                        </div>
+                      </div>
+
+                      <div className="border-t border-[#ffe4f0] px-4 py-3">
+                        <p className="onboarding-select-line onboarding-select-line-5 text-[10px] font-black text-[#b3688e]">
+                          체험단 일정 ▾
+                        </p>
+                        <div className="onboarding-select-line onboarding-select-line-6 mt-2 grid grid-cols-7 gap-1 text-center text-[8px] text-[#c99bb4]">
+                          <span>일</span>
+                          <span>월</span>
+                          <span>화</span>
+                          <span>수</span>
+                          <span>목</span>
+                          <span>금</span>
+                          <span>토</span>
+                        </div>
+                        <div className="mt-1 h-2.5 rounded-full bg-[#dcdcdc]" />
+                        <div className="mt-1 h-2.5 rounded-full bg-[#ffcf7a]" />
+                        <div className="mt-1 h-2.5 rounded-full bg-[#ff9fc7]" />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={fillOnboardingDemoPreview}
+                      className="relative mt-3 w-full whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_14px_24px_rgba(255,123,184,0.32)]"
+                    >
+                      예시 페이지 붙여넣기 (Ctrl+V 대신 눌러보세요)
+                      <span className="onboarding-key-badge onboarding-key-badge-v absolute -top-3 right-4 whitespace-nowrap rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-[#c45991] shadow-[0_4px_10px_rgba(125,49,89,0.3)]">
+                        Ctrl + V 붙여넣기
+                      </span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
+                    <ol className="grid gap-1 text-xs font-bold text-[#b3688e]">
+                      <li>1. 선정된 체험단 페이지 열기</li>
+                      <li>2. 페이지 전체 선택 (Ctrl+A)</li>
+                      <li>3. 복사 (Ctrl+C)</li>
+                      <li>4. 아래에 붙여넣기 (Ctrl+V)</li>
+                    </ol>
+
+                    <textarea
+                      value={pasteContent ? "붙여넣음 ✓" : ""}
+                      onChange={() => {}}
+                      onPaste={handlePasteCapture}
+                      placeholder="여기를 클릭하고 Ctrl+V로 붙여넣어 주세요"
+                      className="mt-4 min-h-[96px] w-full resize-none rounded-[20px] border border-dashed border-[#ffb8d8] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition placeholder:text-[#c99bb4] focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]"
+                    />
+                  </div>
+                )}
+
+                <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
+                  {isParsingPreview ? (
+                    <p className="mt-3 rounded-[18px] bg-[#fff1f8] px-4 py-3 text-sm font-bold text-[#b3688e]">
+                      체험단 정보를 확인하고 있어요...
+                    </p>
+                  ) : null}
+
+                  {parsePreview ? (
+                    <div
+                      ref={onboardingPreviewCardRef}
+                      className={`mt-3 rounded-[22px] border bg-[#fff8fc] p-4 transition ${
+                        isOnboardingPreviewStep
+                          ? "border-[#ff9fc7] ring-4 ring-[#ffd3e6]"
+                          : "border-[#ffd3e6]"
+                      }`}
+                    >
+                      {isOnboardingPreviewStep ? (
+                        <p className="mb-2 text-xs font-bold text-[#c45991]">
+                          체험단 정보를 자동으로 채웠어요! 아래 내용을 확인해보세요.
+                        </p>
+                      ) : null}
+                      <p className="inline-block rounded-full bg-[#ffe1ef] px-3 py-1 text-xs font-black text-[#b3346c]">
+                        {parsePreview.site} 인식 완료 ✓
+                      </p>
+                      <p className="mt-2 text-base font-black text-[#7f355b]">
+                        <CampaignTitle title={parsePreview.title} />
+                      </p>
+                      <p className="mt-1 text-sm text-[#8a5d75]">{parsePreview.reward}</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#8a5d75]">
+                        <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                          <p className="font-bold text-[#b3688e]">체험 기간</p>
+                          <p className="mt-1">
+                            {formatShortDate(parsePreview.experienceStartDate)} ~{" "}
+                            {formatShortDate(parsePreview.experienceEndDate)}
+                          </p>
+                        </div>
+                        <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                          <p className="font-bold text-[#b3688e]">리뷰 마감</p>
+                          <p className="mt-1">{formatShortDate(parsePreview.reviewDeadline)}</p>
+                        </div>
+                        <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                          <p className="font-bold text-[#b3688e]">방문 주소</p>
+                          <p className="mt-1 truncate">{parsePreview.address}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <label className="mt-4 block text-sm font-black text-[#b94a81]">
+                    업체 연락처
+                  </label>
+                  <input
+                    ref={onboardingPhoneInputRef}
+                    value={companyPhoneValue}
+                    onChange={(event) => setCompanyPhoneValue(event.target.value)}
+                    placeholder="예) 010-1234-5678 또는 매장 예약번호"
+                    className={`mt-3 w-full rounded-[20px] border bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6] ${
+                      isOnboardingPhoneStep
+                        ? "border-[#ff9fc7] ring-4 ring-[#ffd3e6]"
+                        : "border-[#ffd3e6]"
+                    }`}
+                  />
+                  {isOnboardingPhoneStep ? (
+                    <p className="mt-2 text-xs font-bold text-[#c45991]">
+                      마지막으로 업체 연락처만 직접 입력해주세요. 이 정보는
+                      자동으로 채워지지 않아요.
+                    </p>
+                  ) : null}
+                  <div className="mt-3 rounded-[20px] bg-[#fff1f8] px-4 py-3 text-xs leading-6 text-[#9a6280]">
+                    업체 연락처는 체험단 사이트에서 확인한 예약번호를 직접 입력해 주세요.
+                    나머지 정보는 붙여넣은 페이지에서 자동으로 불러와요.
+                  </div>
+                  {registerErrorMessage ? (
+                    <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
+                      {registerErrorMessage}
+                    </p>
+                  ) : null}
+                </div>
+
+                {isOnboardingSubmitStep ? (
+                  <p className="mt-4 text-center text-xs font-bold text-[#c45991] sm:text-right">
+                    좋아요! 이제 등록하기를 눌러 마무리해보세요.
+                  </p>
+                ) : null}
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  {onboardingStage !== "tutorial" ? (
+                    <button
+                      onClick={closeRegisterModal}
+                      className="min-w-[96px] whitespace-nowrap rounded-full bg-white px-5 py-3 text-sm font-bold text-[#c55a90] shadow-[0_12px_22px_rgba(255,190,219,0.3)]"
+                    >
+                      취소
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={handleRegisterLink}
+                    disabled={isPending || !parsePreview || !companyPhoneValue.trim()}
+                    className={`min-w-[160px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isOnboardingSubmitStep ? "ring-4 ring-[#ffd3e6] animate-pulse" : ""
+                    }`}
+                  >
+                    {isPending ? "등록 중..." : "등록하기"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}
@@ -2404,7 +2824,7 @@ function AuthScreen({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.9)_0,rgba(255,255,255,0)_16%),radial-gradient(circle_at_80%_72%,rgba(229,214,255,0.65)_0,rgba(229,214,255,0)_16%)]" />
       <div className="relative mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-5xl items-center justify-center">
         <section className="grid w-full overflow-hidden rounded-[40px] border-2 border-white/75 bg-white/78 shadow-[0_34px_90px_rgba(233,116,171,0.24)] backdrop-blur-xl lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="p-6 text-white sm:p-8 lg:p-10">
+          <div className="bg-[linear-gradient(160deg,#ef8bc0_0%,#df7db1_55%,#c56fae_100%)] p-6 text-white sm:p-8 lg:p-10">
             <p className="font-display text-4xl leading-none sm:text-5xl lg:text-6xl">
               리뷰캘린더
             </p>
@@ -2412,8 +2832,8 @@ function AuthScreen({
               선정 체험단과 리뷰 마감일을 계정 안에서 편리하게 관리하세요.
             </p>
             <div className="mt-6 grid gap-2 text-xs font-black text-white/90 sm:mt-10 sm:gap-3 sm:text-sm">
-              <div className="rounded-[24px] bg-white/14 px-4 py-3">캘린더 일정 관리</div>
-              <div className="rounded-[24px] bg-white/14 px-4 py-3">선정 링크 자동 등록</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">선정 체험단 자동 등록</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">체험단 일정 관리</div>
               <div className="rounded-[24px] bg-white/14 px-4 py-3">리뷰 마감 체크</div>
             </div>
           </div>
