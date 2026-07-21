@@ -2019,11 +2019,11 @@ export default function Home() {
                       key={cell.key}
                       onClick={() => handleCalendarDatePick(cell)}
                       disabled={cell.muted || isSchedulePending}
-                      className={`relative min-h-24 rounded-[28px] border p-3 text-left shadow-[0_14px_26px_rgba(255,197,223,0.22)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_34px_rgba(255,145,197,0.28)] sm:min-h-28 lg:min-h-32 ${tone}`}
+                      className={`relative min-h-[72px] rounded-2xl border p-2 text-left shadow-[0_14px_26px_rgba(255,197,223,0.22)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_34px_rgba(255,145,197,0.28)] sm:min-h-28 sm:rounded-[28px] sm:p-3 lg:min-h-32 ${tone}`}
                     >
                       {!cell.muted && (
                         <span
-                          className={`absolute right-3 top-2 ${
+                          className={`absolute right-3 top-2 hidden sm:inline-flex ${
                             cell.deadlineCount
                               ? "text-lg font-black text-[#dc2626]"
                               : "text-sm opacity-80"
@@ -2032,17 +2032,29 @@ export default function Home() {
                           {cell.deco}
                         </span>
                       )}
-                      <span
-                        className={`inline-flex items-center justify-center text-lg font-black sm:text-xl ${dayNumberTone} ${
-                          isToday
-                            ? "h-7 w-7 rounded-full border-2 border-current bg-white/90 sm:h-8 sm:w-8"
-                            : ""
-                        }`}
-                      >
-                        {cell.day}
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`inline-flex items-center justify-center text-sm font-black sm:text-lg sm:text-xl ${dayNumberTone} ${
+                            isToday
+                              ? "h-6 w-6 rounded-full border-2 border-current bg-white/90 sm:h-7 sm:w-7 lg:h-8 lg:w-8"
+                              : ""
+                          }`}
+                        >
+                          {cell.day}
+                        </span>
+                        {!cell.muted && cell.holidayName ? (
+                          <span
+                            aria-label={cell.holidayName}
+                            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full sm:hidden ${
+                              cell.isAlternativeHoliday
+                                ? "bg-[#e78aa4]"
+                                : "bg-[#d94f73]"
+                            }`}
+                          />
+                        ) : null}
                       </span>
                       {cell.holidayName ? (
-                        <div className="mt-2">
+                        <div className="mt-2 hidden sm:block">
                           <span
                             className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-[10px] font-black leading-none shadow-[0_6px_10px_rgba(255,205,227,0.22)] ${
                               cell.isAlternativeHoliday
