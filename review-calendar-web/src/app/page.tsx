@@ -2867,8 +2867,15 @@ function AuthScreen({
                   <input
                     value={username}
                     onChange={(event) => onUsernameChange(event.target.value)}
+                    onBlur={(event) =>
+                      onUsernameChange(
+                        event.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]/g, ""),
+                      )
+                    }
                     className="min-w-0 flex-1 rounded-[22px] border border-[#ffd1e6] bg-white px-4 py-3 text-[#7f355b] outline-none focus:border-[#ef8bc0]"
-                    placeholder="review_lover"
+                    placeholder="reviewlover"
                     autoComplete="username"
                   />
                   {isRegister ? (
@@ -2882,6 +2889,9 @@ function AuthScreen({
                     </button>
                   ) : null}
                 </div>
+                <span className="text-xs font-bold text-[#b98fae]">
+                  영문 소문자, 숫자만 사용 가능합니다.
+                </span>
                 {isRegister && usernameCheckMessage ? (
                   <span className="text-xs font-bold text-[#b45b88]">
                     {usernameCheckMessage}

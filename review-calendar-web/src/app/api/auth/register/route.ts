@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     if (!isValidUsername(username)) {
       return NextResponse.json(
-        { message: "아이디는 영문 소문자, 숫자, 밑줄로 4-20자 입력해 주세요." },
+        { message: "아이디는 영문 소문자, 숫자로 4-20자 입력해 주세요." },
         { status: 400 },
       );
     }

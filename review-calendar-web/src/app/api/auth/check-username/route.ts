@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         available: false,
-        message: "아이디는 영문 소문자, 숫자, 밑줄로 4-20자 입력해 주세요.",
+        message: "아이디는 영문 소문자, 숫자로 4-20자 입력해 주세요.",
       },
       { status: 400 },
     );
