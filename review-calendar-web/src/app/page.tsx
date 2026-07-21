@@ -1768,78 +1768,80 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="flex min-h-[190px] items-start xl:justify-end">
-                  <div className="flex flex-col items-start gap-4 xl:items-end">
-                    <h1 className="font-display text-5xl leading-none text-[#8f315f] sm:text-6xl lg:text-[88px] xl:pt-3">
+                <div className="flex min-h-0 items-start xl:min-h-[190px] xl:justify-end">
+                  <div className="flex w-full flex-col items-start gap-4 xl:w-auto xl:items-end">
+                    <h1 className="font-display text-4xl leading-none text-[#8f315f] sm:text-6xl lg:text-[88px] xl:pt-3">
                       리뷰캘린더
                     </h1>
-                    <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
-                      <div className="flex max-w-full flex-wrap items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(255,190,219,0.28)]">
-                        <span className="max-w-[220px] truncate px-2 text-sm font-black text-[#9a4878]">
+                    <div className="flex w-full flex-col gap-2 xl:w-auto xl:max-w-full xl:flex-row xl:flex-wrap xl:items-center xl:justify-end">
+                      <div className="flex w-full items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(255,190,219,0.28)] xl:w-auto xl:max-w-full xl:flex-wrap">
+                        <span className="min-w-0 flex-1 truncate px-2 text-sm font-black text-[#9a4878] xl:max-w-[220px] xl:flex-none">
                           {currentUser.username}
                         </span>
                         <button
                           onClick={handleLogout}
-                          className="inline-flex min-w-[78px] items-center justify-center whitespace-nowrap rounded-full bg-[#fff0f7] px-3 py-2 text-xs font-black text-[#c45991]"
+                          className="inline-flex min-w-[78px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-[#fff0f7] px-3 py-2 text-xs font-black text-[#c45991]"
                         >
                           로그아웃
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setOnboardingStage("spotlight")}
-                        className="inline-flex min-w-[84px] items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
-                      >
-                        사용가이드
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex min-w-[84px] items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
-                      >
-                        문의/요청
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openSettingsModal}
-                        aria-label="설정"
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          viewBox="0 0 24 24"
-                          className="h-4 w-4"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
+                      <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 xl:contents">
+                        <button
+                          type="button"
+                          onClick={() => setOnboardingStage("spotlight")}
+                          className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] xl:w-auto xl:min-w-[84px]"
                         >
-                          <circle
-                            cx="12"
-                            cy="12"
-                            r="7.5"
-                            stroke="currentColor"
-                            strokeWidth="2.6"
-                            strokeDasharray="1.6 2.4"
-                            strokeLinecap="round"
-                          />
-                          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="인스타그램"
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          viewBox="0 0 24 24"
-                          className="h-4 w-4"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
+                          사용가이드
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] xl:w-auto xl:min-w-[84px]"
                         >
-                          <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.8" />
-                          <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
-                          <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" />
-                        </svg>
-                      </button>
+                          문의/요청
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openSettingsModal}
+                          aria-label="설정"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <circle
+                              cx="12"
+                              cy="12"
+                              r="7.5"
+                              stroke="currentColor"
+                              strokeWidth="2.6"
+                              strokeDasharray="1.6 2.4"
+                              strokeLinecap="round"
+                            />
+                            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="인스타그램"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.8" />
+                            <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
+                            <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2070,17 +2072,17 @@ export default function Home() {
                       (cell.activeCount || cell.deadlineCount || cell.pickedCount) ? (
                         <div className="mt-2 flex flex-wrap items-center gap-1 sm:hidden">
                           {cell.activeCount ? (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#ffd2e6] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#a04676]">
+                            <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-[#ffd2e6] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#a04676]">
                               ♡{cell.activeCount}
                             </span>
                           ) : null}
                           {cell.deadlineCount ? (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#dc2626] px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
+                            <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-[#dc2626] px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
                               !{cell.deadlineCount}
                             </span>
                           ) : null}
                           {cell.pickedCount ? (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f1e7ff] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#7741a4]">
+                            <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-[#f1e7ff] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#7741a4]">
                               🎀{cell.pickedCount}
                             </span>
                           ) : null}

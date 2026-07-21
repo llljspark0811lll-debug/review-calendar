@@ -20,6 +20,12 @@ const parserMatchers = [
       return url.hostname.replace(/^www\./, "") === "dailyview.kr";
     },
   },
+  {
+    id: "chvu",
+    canHandle(url: URL) {
+      return url.hostname.replace(/^www\./, "") === "chvu.co.kr";
+    },
+  },
 ] as const;
 
 function findParserMatcher(url: URL) {
@@ -37,6 +43,11 @@ async function loadParser(
   if (parserId === "dailyview") {
     const { dailyviewParser } = await import("@/lib/parsers/dailyview");
     return dailyviewParser;
+  }
+
+  if (parserId === "chvu") {
+    const { chvuParser } = await import("@/lib/parsers/chvu");
+    return chvuParser;
   }
 
   const { gangnamParser } = await import("@/lib/parsers/gangnam");
@@ -70,6 +81,7 @@ const contentSiteSignatures = [
   { id: "reviewnote", pattern: /reviewnote\.co\.kr|리뷰노트/i },
   { id: "dailyview", pattern: /dailyview\.kr|데일리뷰/i },
   { id: "gangnam", pattern: /xn--939au0g4vj8sq\.net|강남맛집/i },
+  { id: "chvu", pattern: /chvu\.co\.kr|체험뷰/i },
 ] as const;
 
 function detectParserIdFromContent(content: string) {
