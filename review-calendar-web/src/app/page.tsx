@@ -1891,7 +1891,7 @@ export default function Home() {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => moveVisibleMonth(-1)}
-                    className="inline-flex min-w-[72px] items-center justify-center whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white text-sm font-bold text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] sm:h-auto sm:w-auto sm:min-w-[72px] sm:px-4 sm:py-2"
                     aria-label="이전 달"
                   >
                     <svg
@@ -1934,7 +1934,7 @@ export default function Home() {
                   </select>
                   <button
                     onClick={() => moveVisibleMonth(1)}
-                    className="inline-flex min-w-[72px] items-center justify-center whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)]"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white text-sm font-bold text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] sm:h-auto sm:w-auto sm:min-w-[72px] sm:px-4 sm:py-2"
                     aria-label="다음 달"
                   >
                     <svg
