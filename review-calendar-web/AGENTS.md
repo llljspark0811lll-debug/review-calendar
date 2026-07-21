@@ -90,7 +90,7 @@
 
 ## 캘린더 표시 규칙
 
-- `unscheduled` 체험단만 `체험 N건`
+- `unscheduled` 체험단만 `체험가능 N건`
 - 리뷰 마감일이 해당 날짜인 체험단만 `마감 N건`
 - `scheduled`이고 확정 날짜가 해당 날짜인 체험단만 `방문 확정 N건`
 - `completed`, `review_submitted` 상태 체험단은 캘린더에 표시하지 않는다.

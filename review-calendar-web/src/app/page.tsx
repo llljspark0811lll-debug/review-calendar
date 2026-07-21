@@ -4,6 +4,7 @@ import {
   type ClipboardEvent,
   type FormEvent,
   type MouseEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useRef,
@@ -36,12 +37,13 @@ type ParsedCampaignPreview = Omit<Campaign, "id" | "companyPhone" | "contactLock
 type CheckpointTone = "pink" | "yellow" | "lavender";
 
 type CheckpointCardData = {
-  id: "today-visit" | "deadline-soon" | "pending-complete";
+  id: string;
   label: string;
   countLabel: string;
   summary: string;
   tone: CheckpointTone;
   campaigns: Campaign[];
+  detailLine: (campaign: Campaign) => ReactNode | null;
 };
 
 type CalendarTone =
@@ -53,6 +55,8 @@ type CalendarTone =
   | "danger"
   | "lavender";
 
+type CalendarSectionKind = "active" | "deadline" | "picked";
+
 type CalendarCell = {
   key: string;
   day: number;
@@ -61,10 +65,13 @@ type CalendarCell = {
   holidayName?: string;
   isAlternativeHoliday?: boolean;
   label?: string;
+  labelKind?: CalendarSectionKind;
   entries?: string[];
   secondaryLabel?: string;
+  secondaryLabelKind?: CalendarSectionKind;
   secondaryEntries?: string[];
   tertiaryLabel?: string;
+  tertiaryLabelKind?: CalendarSectionKind;
   tertiaryEntries?: string[];
   deco?: string;
   type?: CalendarTone;
@@ -81,6 +88,34 @@ const cellStyles: Record<CalendarTone, string> = {
   warn: "bg-[#fff0c9] border-[#ffd07a] text-[#8a5b19]",
   danger: "bg-[#fff2f8] border-[#ffd2e6] text-[#a04676]",
   lavender: "bg-[#fff2f8] border-[#ffd2e6] text-[#a04676]",
+};
+
+/*
+ * 캘린더 칸 안에서 "체험"(아직 진행 전, 노력 필요) / "마감"(리뷰 기한 임박,
+ * 긴급) / "방문 확정"(일정 확정, 안심)을 한눈에 구별할 수 있도록 각 항목에
+ * 고정된 색을 준다. 모바일 압축 배지(♡ 분홍 / ! 빨강 / 🎀 보라)에서 이미
+ * 쓰던 색을 그대로 데스크톱 라벨/칩에도 맞춰서, 화면 크기가 바뀌어도 같은
+ * 색이 같은 의미를 가리키도록 통일했다.
+ */
+const sectionKindStyles: Record<
+  CalendarSectionKind,
+  { label: string; chip: string; chipMore: string }
+> = {
+  active: {
+    label: "text-[#c2447f]",
+    chip: "border-white/70 bg-white/70 text-[#a0397a]",
+    chipMore: "border-dashed border-white/80 bg-white/55 text-[#a0397a] opacity-80",
+  },
+  deadline: {
+    label: "text-[#dc2626]",
+    chip: "border-[#ffb4b4] bg-[#fff1f1] text-[#c23a3a]",
+    chipMore: "border-dashed border-[#ffb4b4] bg-[#fff7f7] text-[#c23a3a] opacity-90",
+  },
+  picked: {
+    label: "text-[#7741a4]",
+    chip: "border-[#e2d2ff] bg-[#f6f0ff] text-[#7741a4]",
+    chipMore: "border-dashed border-[#e2d2ff] bg-[#faf6ff] text-[#7741a4] opacity-90",
+  },
 };
 
 function formatMonthDay(dateString: string) {
@@ -260,24 +295,33 @@ function createCalendarCells(
     const sections = [
       activeCampaigns.length
         ? {
-            label: `체험 ${activeCampaigns.length}건`,
+            kind: "active" as const,
+            label: `체험가능 ${activeCampaigns.length}건`,
             entries: activeEntries,
           }
         : null,
       deadlineCampaigns.length
         ? {
+            kind: "deadline" as const,
             label: `마감 ${deadlineCampaigns.length}건`,
             entries: deadlineEntries,
           }
         : null,
       pickedCampaigns.length
         ? {
+            kind: "picked" as const,
             label: `방문 확정 ${pickedCampaigns.length}건`,
             entries: pickedEntries,
           }
         : null,
-    ].filter((section): section is { label: string; entries: string[] } =>
-      Boolean(section),
+    ].filter(
+      (
+        section,
+      ): section is {
+        kind: CalendarSectionKind;
+        label: string;
+        entries: string[];
+      } => Boolean(section),
     );
 
     if (sections.length) {
@@ -296,10 +340,13 @@ function createCalendarCells(
         holidayName: holiday?.name,
         isAlternativeHoliday: holiday?.isAlternative,
         label: sections[0].label,
+        labelKind: sections[0].kind,
         entries: sections[0].entries,
         secondaryLabel: sections[1]?.label,
+        secondaryLabelKind: sections[1]?.kind,
         secondaryEntries: sections[1]?.entries,
         tertiaryLabel: sections[2]?.label,
+        tertiaryLabelKind: sections[2]?.kind,
         tertiaryEntries: sections[2]?.entries,
         type,
         deco: pickedCampaigns.length ? "🎀" : deadlineCampaigns.length ? "!" : "♡",
@@ -374,6 +421,8 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [campaignToDelete, setCampaignToDelete] = useState<Campaign | null>(null);
   const [activeCheckpointId, setActiveCheckpointId] =
+    useState<CheckpointCardData["id"] | null>(null);
+  const [activeProgressCardId, setActiveProgressCardId] =
     useState<CheckpointCardData["id"] | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -499,6 +548,8 @@ export default function Home() {
         ),
         tone: "pink",
         campaigns: todayVisitCampaigns,
+        detailLine: (campaign) =>
+          `방문 일정: ${formatDateTime(campaign.selectedDate)}`,
       },
       {
         id: "deadline-soon",
@@ -510,6 +561,8 @@ export default function Home() {
         ),
         tone: "yellow",
         campaigns: deadlineSoonCampaigns,
+        detailLine: (campaign) =>
+          `리뷰 마감: ${formatMonthDay(campaign.reviewDeadline)}`,
       },
       {
         id: "pending-complete",
@@ -521,11 +574,78 @@ export default function Home() {
         ),
         tone: "lavender",
         campaigns: pendingCompleteCampaigns,
+        detailLine: (campaign) =>
+          `확정 일정: ${formatDateTime(campaign.selectedDate)}`,
       },
     ];
   })();
   const activeCheckpoint =
     checkpointCards.find((card) => card.id === activeCheckpointId) ?? null;
+
+  const progressCards: CheckpointCardData[] = (() => {
+    const unscheduledCampaigns = campaigns
+      .filter((campaign) => campaign.status === "unscheduled")
+      .sort((left, right) =>
+        left.experienceStartDate.localeCompare(right.experienceStartDate),
+      );
+
+    const deadlineWeekCampaigns = campaigns
+      .filter((campaign) => {
+        if (campaign.status === "review_submitted") {
+          return false;
+        }
+
+        const diff =
+          new Date(campaign.reviewDeadline).getTime() - new Date(todayIso).getTime();
+        const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        return days >= 0 && days <= 7;
+      })
+      .sort((left, right) => left.reviewDeadline.localeCompare(right.reviewDeadline));
+
+    const allCampaigns = [...campaigns].sort((left, right) =>
+      right.experienceStartDate.localeCompare(left.experienceStartDate),
+    );
+
+    return [
+      {
+        id: "unscheduled-all",
+        label: "날짜 미정",
+        countLabel: `${unscheduledCampaigns.length}건`,
+        summary: buildCheckpointSummary(
+          unscheduledCampaigns,
+          "날짜 미정인 체험단이 없어요",
+        ),
+        tone: "pink",
+        campaigns: unscheduledCampaigns,
+        detailLine: (campaign) =>
+          `체험 기간: ${formatMonthDay(campaign.experienceStartDate)} - ${formatMonthDay(campaign.experienceEndDate)}`,
+      },
+      {
+        id: "deadline-week",
+        label: "마감 임박",
+        countLabel: `${deadlineWeekCampaigns.length}건`,
+        summary: buildCheckpointSummary(
+          deadlineWeekCampaigns,
+          "일주일 내 임박한 리뷰 마감이 없어요",
+        ),
+        tone: "yellow",
+        campaigns: deadlineWeekCampaigns,
+        detailLine: (campaign) =>
+          `리뷰 마감: ${formatMonthDay(campaign.reviewDeadline)}`,
+      },
+      {
+        id: "registered-all",
+        label: "등록 체험단",
+        countLabel: `${allCampaigns.length}건`,
+        summary: buildCheckpointSummary(allCampaigns, "등록된 체험단이 없어요"),
+        tone: "lavender",
+        campaigns: allCampaigns,
+        detailLine: () => null,
+      },
+    ];
+  })();
+  const activeProgressCard =
+    progressCards.find((card) => card.id === activeProgressCardId) ?? null;
   const selectedCampaignForSelectedTab =
     pagedSelectedCampaigns.find((campaign) => campaign.id === selectedId) ??
     pagedSelectedCampaigns[0] ??
@@ -1635,9 +1755,8 @@ export default function Home() {
                           체험단 등록
                         </span>
                         <span className="mt-5 block max-w-[220px] text-base leading-7 text-white/92">
-                          선정된 체험단 페이지를 붙여넣고
-                          <br />
-                          체험정보를 바로 관리하세요
+                          선정된 체험단 페이지 내용을 붙여넣고 체험정보와 일정을 바로
+                          관리하세요.
                         </span>
                       </div>
                       <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-white/18">
@@ -1654,19 +1773,18 @@ export default function Home() {
                     <h1 className="font-display text-5xl leading-none text-[#8f315f] sm:text-6xl lg:text-[88px] xl:pt-3">
                       리뷰캘린더
                     </h1>
-                    <div className="flex max-w-full flex-wrap items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(255,190,219,0.28)]">
-                      <span className="max-w-[220px] truncate px-2 text-sm font-black text-[#9a4878]">
-                        {currentUser.username}
-                      </span>
-                      <button
-                        onClick={handleLogout}
-                        className="inline-flex min-w-[78px] items-center justify-center whitespace-nowrap rounded-full bg-[#fff0f7] px-3 py-2 text-xs font-black text-[#c45991]"
-                      >
-                        로그아웃
-                      </button>
-                    </div>
-
                     <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
+                      <div className="flex max-w-full flex-wrap items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(255,190,219,0.28)]">
+                        <span className="max-w-[220px] truncate px-2 text-sm font-black text-[#9a4878]">
+                          {currentUser.username}
+                        </span>
+                        <button
+                          onClick={handleLogout}
+                          className="inline-flex min-w-[78px] items-center justify-center whitespace-nowrap rounded-full bg-[#fff0f7] px-3 py-2 text-xs font-black text-[#c45991]"
+                        >
+                          로그아웃
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setOnboardingStage("spotlight")}
@@ -1726,9 +1844,6 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <p className="mt-6 text-2xl font-black leading-snug text-[#e36aa6] sm:text-3xl">
-                선정된 체험단 페이지를 붙여넣으면 일정과 마감일을 한 번에 관리할 수 있어요
-              </p>
             </div>
           </div>
 
@@ -1963,8 +2078,8 @@ export default function Home() {
                         <div className="hidden sm:block">
                           <p
                             className={`text-xs font-bold leading-5 sm:text-sm ${
-                              cell.holidayName ? "mt-3" : "mt-5"
-                            }`}
+                              sectionKindStyles[cell.labelKind ?? "active"].label
+                            } ${cell.holidayName ? "mt-3" : "mt-5"}`}
                           >
                             {cell.label}
                           </p>
@@ -1973,13 +2088,19 @@ export default function Home() {
                               {cell.entries.slice(0, 3).map((entry, entryIndex) => (
                                 <span
                                   key={`${cell.key}-${entryIndex}-${entry}`}
-                                  className="font-legible-thin inline-flex max-w-full items-center rounded-full border border-white/70 bg-white/70 px-2 py-1 text-[10px] font-black leading-none text-[#a0397a] opacity-90 shadow-[0_6px_10px_rgba(255,205,227,0.22)] backdrop-blur-sm"
+                                  className={`font-legible-thin inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[10px] font-black leading-none opacity-90 shadow-[0_6px_10px_rgba(255,205,227,0.22)] backdrop-blur-sm ${
+                                    sectionKindStyles[cell.labelKind ?? "active"].chip
+                                  }`}
                                 >
                                   <span className="truncate">{entry}</span>
                                 </span>
                               ))}
                               {cell.entries.length > 3 ? (
-                                <span className="inline-flex items-center rounded-full border border-dashed border-white/80 bg-white/55 px-2 py-1 text-[10px] font-black leading-none text-[#a0397a] opacity-80">
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-black leading-none ${
+                                    sectionKindStyles[cell.labelKind ?? "active"].chipMore
+                                  }`}
+                                >
                                   +{cell.entries.length - 3}
                                 </span>
                               ) : null}
@@ -1987,7 +2108,11 @@ export default function Home() {
                           ) : null}
                           {cell.secondaryLabel ? (
                             <div className="mt-3">
-                              <p className="text-[11px] font-black opacity-80">
+                              <p
+                                className={`text-xs font-bold sm:text-sm ${
+                                  sectionKindStyles[cell.secondaryLabelKind ?? "active"].label
+                                }`}
+                              >
                                 {cell.secondaryLabel}
                               </p>
                               {cell.secondaryEntries?.length ? (
@@ -1997,13 +2122,21 @@ export default function Home() {
                                     .map((entry, entryIndex) => (
                                     <span
                                       key={`${cell.key}-secondary-${entryIndex}-${entry}`}
-                                      className="font-legible-thin inline-flex max-w-full items-center rounded-full border border-[#ffc2cf] bg-[#fff2f5] px-2 py-1 text-[10px] font-black leading-none text-[#a84763] shadow-[0_6px_10px_rgba(255,205,227,0.18)]"
+                                      className={`font-legible-thin inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[10px] font-black leading-none shadow-[0_6px_10px_rgba(255,205,227,0.18)] ${
+                                        sectionKindStyles[cell.secondaryLabelKind ?? "active"]
+                                          .chip
+                                      }`}
                                     >
                                       <span className="truncate">{entry}</span>
                                     </span>
                                   ))}
                                   {cell.secondaryEntries.length > 2 ? (
-                                    <span className="inline-flex items-center rounded-full border border-dashed border-[#ffc2cf] bg-[#fff7f9] px-2 py-1 text-[10px] font-black leading-none text-[#b5627b] opacity-90">
+                                    <span
+                                      className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-black leading-none ${
+                                        sectionKindStyles[cell.secondaryLabelKind ?? "active"]
+                                          .chipMore
+                                      }`}
+                                    >
                                       +{cell.secondaryEntries.length - 2}
                                     </span>
                                   ) : null}
@@ -2013,7 +2146,11 @@ export default function Home() {
                           ) : null}
                           {cell.tertiaryLabel ? (
                             <div className="mt-3">
-                              <p className="text-[11px] font-black opacity-80">
+                              <p
+                                className={`text-xs font-bold sm:text-sm ${
+                                  sectionKindStyles[cell.tertiaryLabelKind ?? "active"].label
+                                }`}
+                              >
                                 {cell.tertiaryLabel}
                               </p>
                               {cell.tertiaryEntries?.length ? (
@@ -2023,13 +2160,21 @@ export default function Home() {
                                     .map((entry, entryIndex) => (
                                     <span
                                       key={`${cell.key}-tertiary-${entryIndex}-${entry}`}
-                                      className="font-legible-thin inline-flex max-w-full items-center rounded-full border border-[#ffbfd8] bg-[#fff4fa] px-2 py-1 text-[10px] font-black leading-none text-[#a54777] shadow-[0_6px_10px_rgba(255,205,227,0.18)]"
+                                      className={`font-legible-thin inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[10px] font-black leading-none shadow-[0_6px_10px_rgba(255,205,227,0.18)] ${
+                                        sectionKindStyles[cell.tertiaryLabelKind ?? "active"]
+                                          .chip
+                                      }`}
                                     >
                                       <span className="truncate">{entry}</span>
                                     </span>
                                   ))}
                                   {cell.tertiaryEntries.length > 2 ? (
-                                    <span className="inline-flex items-center rounded-full border border-dashed border-[#ffbfd8] bg-[#fff8fc] px-2 py-1 text-[10px] font-black leading-none text-[#b56288] opacity-90">
+                                    <span
+                                      className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-black leading-none ${
+                                        sectionKindStyles[cell.tertiaryLabelKind ?? "active"]
+                                          .chipMore
+                                      }`}
+                                    >
                                       +{cell.tertiaryEntries.length - 2}
                                     </span>
                                   ) : null}
@@ -2046,32 +2191,15 @@ export default function Home() {
             </article>
 
             <article className="relative overflow-hidden rounded-[42px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.76),rgba(255,244,250,0.94))] p-5 shadow-[0_30px_70px_rgba(233,116,171,0.18)] sm:p-6">
-              <SectionTitle title="진행 상태" />
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                <StatCard
-                  title="날짜 미정"
-                  value={`${campaigns.filter((item) => item.status === "unscheduled").length}`.padStart(2, "0")}
-                  bg="bg-[#ffddec]"
-                  text="text-[#8b2f58]"
-                />
-                <StatCard
-                  title="마감 임박"
-                  value={`${campaigns.filter((item) => {
-                    const diff =
-                      new Date(item.reviewDeadline).getTime() -
-                      today.getTime();
-                    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-                    return days >= 0 && days <= 7;
-                  }).length}`.padStart(2, "0")}
-                  bg="bg-[#fff1c4]"
-                  text="text-[#8f5c14]"
-                />
-                <StatCard
-                  title="등록 체험단"
-                  value={`${campaigns.length}`.padStart(2, "0")}
-                  bg="bg-[#eee1ff]"
-                  text="text-[#7044a0]"
-                />
+              <SectionTitle title="전체 진행상태" />
+              <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                {progressCards.map((card) => (
+                  <CheckpointCard
+                    key={card.id}
+                    {...card}
+                    onClick={() => setActiveProgressCardId(card.id)}
+                  />
+                ))}
               </div>
             </article>
           </section>
@@ -2739,8 +2867,21 @@ export default function Home() {
 
       {activeCheckpoint ? (
         <CheckpointDetailModal
+          key={activeCheckpoint.id}
           checkpoint={activeCheckpoint}
+          eyebrow="오늘의 체크 포인트"
+          description="오늘 꼭 확인해야 하는 체험단 목록이에요."
           onClose={() => setActiveCheckpointId(null)}
+        />
+      ) : null}
+
+      {activeProgressCard ? (
+        <CheckpointDetailModal
+          key={activeProgressCard.id}
+          checkpoint={activeProgressCard}
+          eyebrow="전체 진행상태"
+          description="조건에 해당하는 체험단 전체 목록이에요."
+          onClose={() => setActiveProgressCardId(null)}
         />
       ) : null}
 
@@ -3097,31 +3238,6 @@ function CheckpointCard({
         <p className="mt-2 text-sm leading-6 text-[#8b5974]">{summary}</p>
       </div>
     </button>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  bg,
-  text,
-}: {
-  title: string;
-  value: string;
-  bg: string;
-  text: string;
-}) {
-  const wrapperClass =
-    "rounded-[28px] px-4 py-4 shadow-[0_14px_24px_rgba(255,196,223,0.22)] " +
-    bg;
-  const textClass = "text-xs font-black tracking-[0.12em] " + text;
-  const valueClass = "mt-2 font-display text-4xl " + text;
-
-  return (
-    <div className={wrapperClass}>
-      <p className={textClass}>{title}</p>
-      <p className={valueClass}>{value}</p>
-    </div>
   );
 }
 
@@ -3766,24 +3882,41 @@ function CampaignInfoDialog({
 
 function CheckpointDetailModal({
   checkpoint,
+  eyebrow,
+  description,
   onClose,
 }: {
   checkpoint: CheckpointCardData;
+  eyebrow: string;
+  description: string;
   onClose: () => void;
 }) {
+  const pageSize = 3;
+  const [page, setPage] = useState(1);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(checkpoint.campaigns.length / pageSize),
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pagedCampaigns = checkpoint.campaigns.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
       <div className="max-h-[min(88vh,980px)] w-full max-w-2xl overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
-              오늘의 체크 포인트
+              {eyebrow}
             </p>
             <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
               {checkpoint.label}
             </h2>
             <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-              오늘 꼭 확인해야 하는 체험단 목록이에요.
+              {description}
             </p>
           </div>
           <button
@@ -3799,43 +3932,60 @@ function CheckpointDetailModal({
         </div>
 
         <div className="mt-5 grid gap-3">
-          {checkpoint.campaigns.length ? (
-            checkpoint.campaigns.map((campaign) => (
-              <div
-                key={`${checkpoint.id}-${campaign.id}`}
-                className="rounded-[24px] border border-[#ffd4e7] bg-[#fff8fc] p-4"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap gap-2">
-                      <Badge>{campaign.site}</Badge>
-                      <Badge tone="yellow">{statusLabel(campaign.status)}</Badge>
-                    </div>
-                    <h4 className="mt-3 text-xl font-black text-[#8d315f]">
-                      <CampaignTitle title={campaign.title} />
-                    </h4>
-                    <div className="mt-2 space-y-1 text-sm text-[#8d5b75]">
-                      {checkpoint.id === "today-visit" ? (
-                        <p>방문 일정: {formatDateTime(campaign.selectedDate)}</p>
-                      ) : null}
-                      {checkpoint.id === "deadline-soon" ? (
-                        <p>리뷰 마감: {formatMonthDay(campaign.reviewDeadline)}</p>
-                      ) : null}
-                      {checkpoint.id === "pending-complete" ? (
-                        <p>확정 일정: {formatDateTime(campaign.selectedDate)}</p>
-                      ) : null}
-                      <p>제공 내역: {campaign.reward}</p>
+          {pagedCampaigns.length ? (
+            pagedCampaigns.map((campaign) => {
+              const detail = checkpoint.detailLine(campaign);
+
+              return (
+                <div
+                  key={`${checkpoint.id}-${campaign.id}`}
+                  className="rounded-[24px] border border-[#ffd4e7] bg-[#fff8fc] p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap gap-2">
+                        <Badge>{campaign.site}</Badge>
+                        <Badge tone="yellow">{statusLabel(campaign.status)}</Badge>
+                      </div>
+                      <h4 className="mt-3 text-xl font-black text-[#8d315f]">
+                        <CampaignTitle title={campaign.title} />
+                      </h4>
+                      <div className="mt-2 space-y-1 text-sm text-[#8d5b75]">
+                        {detail ? <p>{detail}</p> : null}
+                        <p>제공 내역: {campaign.reward}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="rounded-[24px] border border-dashed border-[#f0bfd8] bg-[#fffafc] px-4 py-6 text-center text-sm leading-6 text-[#9a6280]">
               표시할 체험단이 없어요.
             </div>
           )}
         </div>
+        {checkpoint.campaigns.length > pageSize ? (
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="inline-flex min-w-[72px] items-center justify-center whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              이전
+            </button>
+            <span className="rounded-full bg-[#fff3f9] px-4 py-2 text-sm font-bold text-[#a84d7f]">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="inline-flex min-w-[72px] items-center justify-center whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              다음
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
