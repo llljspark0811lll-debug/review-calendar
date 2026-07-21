@@ -233,3 +233,24 @@ button {
 .onboarding-key-badge-v {
   animation: onboarding-key-badge-v 3.6s ease-in-out infinite;
 }
+
+/*
+ * 대시보드 탭 옆 등록 체험단 티커: 표시 중인 항목이 바뀔 때마다 살짝 위로
+ * 슬라이드하며 페이드인되는 1회성 애니메이션. React가 key={activeIndex}로
+ * 매번 새 엘리먼트를 마운트하기 때문에 애니메이션이 항목이 바뀔 때마다
+ * 자연스럽게 다시 재생된다.
+ */
+@keyframes ticker-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ticker-item-in {
+  animation: ticker-item-in 0.35s ease-out;
+}

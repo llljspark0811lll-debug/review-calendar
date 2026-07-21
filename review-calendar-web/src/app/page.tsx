@@ -11,6 +11,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { createPortal } from "react-dom";
 import type { Campaign, CampaignStatus } from "@/types/campaign";
 import type { Holiday } from "@/types/holiday";
 
@@ -1863,6 +1864,7 @@ export default function Home() {
                 {tab.label}
               </button>
             ))}
+            <SupportedSitesTicker />
           </div>
         </header>
         {activeDashboardTab === "calendar" ? (
@@ -3213,6 +3215,102 @@ function DetailCard({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-2 text-sm font-bold text-[#7b4b66]">{value}</p>
+    </div>
+  );
+}
+
+// 자동 등록을 지원하는 체험단 사이트 목록. AGENTS.md "현재 자동 등록을
+// 지원하는 사이트" 항목과 항상 같이 갱신한다.
+const SUPPORTED_SITE_NAMES = ["강남맛집", "리뷰노트", "체험뷰", "데일리뷰"];
+
+function SupportedSitesTicker() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [panelRect, setPanelRect] = useState<{
+    top: number;
+    right: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isExpanded) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % SUPPORTED_SITE_NAMES.length);
+    }, 2500);
+
+    return () => clearInterval(timer);
+  }, [isExpanded]);
+
+  // 이 위젯을 감싸는 <header>가 장식용 그라디언트 원을 잘라내려고
+  // overflow-hidden을 쓰고 있어서, 펼침 목록을 그 안에 그대로 두면
+  // 화면 밖으로 나가는 부분이 잘려서 안 보인다. 그래서 펼침 목록만
+  // document.body에 포털로 그리고, 버튼의 실제 화면 좌표를 계산해
+  // position: fixed로 그 바로 아래에 띄운다.
+  function openPanel() {
+    const rect = triggerRef.current?.getBoundingClientRect();
+
+    if (rect) {
+      setPanelRect({ top: rect.bottom, right: window.innerWidth - rect.right });
+    }
+
+    setIsExpanded(true);
+  }
+
+  function closePanel() {
+    setIsExpanded(false);
+  }
+
+  const activeSite = SUPPORTED_SITE_NAMES[activeIndex % SUPPORTED_SITE_NAMES.length];
+
+  return (
+    <div
+      className="relative ml-auto hidden lg:block"
+      onMouseEnter={openPanel}
+      onMouseLeave={closePanel}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (isExpanded ? closePanel() : openPanel())}
+        className="flex h-full min-w-[220px] items-center gap-2 rounded-full bg-white px-5 py-3 text-left shadow-[0_12px_22px_rgba(255,193,219,0.38)]"
+      >
+        <span className="whitespace-nowrap text-xs font-black tracking-[0.1em] text-[#c45991]">
+          등록지원 사이트
+        </span>
+        <span
+          key={activeSite}
+          className="ticker-item-in min-w-0 flex-1 truncate text-sm font-bold text-[#8f315f]"
+        >
+          {activeSite}
+        </span>
+      </button>
+
+      {isExpanded && panelRect
+        ? createPortal(
+            <div
+              style={{ top: panelRect.top + 8, right: panelRect.right }}
+              className="fixed z-50 w-72 rounded-[28px] border border-white/70 bg-white p-3 shadow-[0_24px_48px_rgba(233,116,171,0.28)]"
+              onMouseEnter={openPanel}
+              onMouseLeave={closePanel}
+            >
+              <p className="px-2 text-xs font-black tracking-[0.08em] text-[#c45991]">
+                자동 등록 지원 사이트
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2 px-2">
+                {SUPPORTED_SITE_NAMES.map((site) => (
+                  <Badge key={site}>{site}</Badge>
+                ))}
+              </div>
+              <p className="mt-3 border-t border-[#ffe3ee] px-2 pt-3 text-xs leading-5 text-[#9a6280]">
+                찾는 사이트가 없나요? &quot;문의/요청&quot;으로 알려주시면 검토할게요.
+              </p>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
