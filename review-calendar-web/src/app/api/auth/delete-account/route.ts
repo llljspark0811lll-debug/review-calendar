@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clearSession, getCurrentUser, verifyPassword } from "@/lib/auth";
 import { deleteUser, findUserById } from "@/lib/db";
 import { toClientMessage } from "@/lib/errors";
+import { sendTelegramMessage } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await sendTelegramMessage(`🗑 계정 탈퇴\n아이디: ${currentUser.username}`);
     await deleteUser(currentUser.id);
     await clearSession();
 

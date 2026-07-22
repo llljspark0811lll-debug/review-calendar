@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth";
 import { findUserByEmail, findUserByUsername, insertUser } from "@/lib/db";
 import { toClientMessage } from "@/lib/errors";
+import { sendTelegramMessage } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 
@@ -89,6 +90,9 @@ export async function POST(request: Request) {
     });
 
     await createSession(user.id);
+    await sendTelegramMessage(
+      `🆕 새 회원가입\n아이디: ${user.username}\n이메일: ${user.email}`,
+    );
 
     return NextResponse.json({ user });
   } catch (error) {

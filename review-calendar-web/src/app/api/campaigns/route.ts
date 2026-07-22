@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { insertCampaign } from "@/lib/db";
 import { toClientMessage } from "@/lib/errors";
+import { sendTelegramMessage } from "@/lib/telegram";
 import type { Campaign } from "@/types/campaign";
 
 export const runtime = "nodejs";
@@ -68,6 +69,9 @@ export async function POST(request: Request) {
     };
 
     await insertCampaign(campaign, user.id);
+    await sendTelegramMessage(
+      `📋 체험단 등록\n사용자: ${user.username}\n사이트: ${campaign.site}\n제목: ${campaign.title}`,
+    );
 
     return NextResponse.json({ campaign }, { status: 201 });
   } catch (error) {

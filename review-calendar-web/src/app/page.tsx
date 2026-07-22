@@ -35,6 +35,15 @@ type AppUser = {
 type AuthMode = "login" | "register";
 type ParsedCampaignPreview = Omit<Campaign, "id" | "companyPhone" | "contactLocked">;
 
+type InquiryType = "usage" | "feature" | "bug" | "etc";
+
+const inquiryTypeOptions: { id: InquiryType; label: string; icon: string }[] = [
+  { id: "usage", label: "사용방법 문의", icon: "\u{1F4AC}" },
+  { id: "feature", label: "기능 추가 요구", icon: "\u{2728}" },
+  { id: "bug", label: "버그 제보", icon: "\u{1F41B}" },
+  { id: "etc", label: "기타", icon: "\u{1F4DD}" },
+];
+
 type CheckpointTone = "pink" | "yellow" | "lavender";
 
 type CheckpointCardData = {
@@ -438,6 +447,12 @@ export default function Home() {
   const [isSettingsPending, setIsSettingsPending] = useState(false);
   const [isDeleteAccountPending, setIsDeleteAccountPending] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
+  const [inquiryType, setInquiryType] = useState<InquiryType | null>(null);
+  const [inquiryMessage, setInquiryMessage] = useState("");
+  const [isInquiryPending, setIsInquiryPending] = useState(false);
+  const [inquiryErrorMessage, setInquiryErrorMessage] = useState("");
+  const [inquirySuccessMessage, setInquirySuccessMessage] = useState("");
   const [onboardingStage, setOnboardingStage] = useState<
     "spotlight" | "tutorial" | "complete" | null
   >(null);
@@ -1010,6 +1025,68 @@ export default function Home() {
     setSettingsErrorMessage("");
     setSettingsSuccessMessage("");
     setIsDeleteConfirmOpen(false);
+  }
+
+  function openInquiryModal() {
+    setInquiryType(null);
+    setInquiryMessage("");
+    setInquiryErrorMessage("");
+    setInquirySuccessMessage("");
+    setIsInquiryModalOpen(true);
+  }
+
+  function closeInquiryModal() {
+    setIsInquiryModalOpen(false);
+    setInquiryType(null);
+    setInquiryMessage("");
+    setInquiryErrorMessage("");
+    setInquirySuccessMessage("");
+  }
+
+  async function handleSubmitInquiry() {
+    setInquiryErrorMessage("");
+    setInquirySuccessMessage("");
+
+    if (!inquiryType) {
+      setInquiryErrorMessage("문의 유형을 선택해 주세요.");
+      return;
+    }
+
+    const trimmedMessage = inquiryMessage.trim();
+
+    if (!trimmedMessage) {
+      setInquiryErrorMessage("문의 내용을 입력해 주세요.");
+      return;
+    }
+
+    setIsInquiryPending(true);
+
+    try {
+      const response = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type: inquiryType, message: trimmedMessage }),
+      });
+      const result = await readApiJson<{ ok?: boolean; message?: string }>(
+        response,
+        "문의 접수 중 문제가 생겼어요.",
+      );
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message ?? "문의 접수 중 문제가 생겼어요.");
+      }
+
+      setInquiryMessage("");
+      setInquirySuccessMessage("문의가 접수됐어요. 등록된 관리자 이메일로 답변드릴게요.");
+    } catch (error) {
+      setInquiryErrorMessage(
+        error instanceof Error ? error.message : "문의 접수 중 문제가 생겼어요.",
+      );
+    } finally {
+      setIsInquiryPending(false);
+    }
   }
 
   async function handleSendSettingsEmailCode() {
@@ -1796,6 +1873,7 @@ export default function Home() {
                         </button>
                         <button
                           type="button"
+                          onClick={openInquiryModal}
                           className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-full bg-white/80 px-3 py-2 text-xs font-black text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] xl:w-auto xl:min-w-[84px]"
                         >
                           문의/요청
@@ -2851,6 +2929,98 @@ export default function Home() {
                 {isDeleteAccountPending ? "처리 중..." : "계속 진행"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isInquiryModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#7d3159]/30 p-4 backdrop-blur-sm">
+          <div className="max-h-[min(88vh,980px)] w-full max-w-lg overflow-y-auto rounded-[36px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,247,251,0.98),rgba(255,236,245,0.95))] p-6 shadow-[0_30px_70px_rgba(210,89,151,0.26)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
+                  문의 / 요청
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-[#8f315f] sm:text-3xl">
+                  무엇을 도와드릴까요?
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
+                  보내주신 내용을 확인 후 이메일로 답변드립니다 (1~2 영업일)
+                </p>
+              </div>
+              <button
+                onClick={closeInquiryModal}
+                className="min-w-[88px] shrink-0 whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-bold text-[#c6538c] shadow-[0_10px_22px_rgba(255,190,219,0.4)]"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
+              <label className="block text-sm font-black text-[#b94a81]">
+                문의 유형
+              </label>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {inquiryTypeOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setInquiryType(option.id)}
+                    className={`flex items-center gap-2 rounded-[20px] border px-4 py-3 text-left text-sm font-bold transition ${
+                      inquiryType === option.id
+                        ? "border-[#ff93c4] bg-[#fff0f7] text-[#c4518a]"
+                        : "border-[#ffd3e6] bg-white text-[#7f355b]"
+                    }`}
+                  >
+                    <span aria-hidden="true">{option.icon}</span>
+                    <span className="min-w-0 truncate">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 flex items-center justify-between">
+                <label className="block text-sm font-black text-[#b94a81]">
+                  문의 내용
+                </label>
+                <span className="text-xs font-bold text-[#c99bb4]">
+                  {inquiryMessage.length}/2000
+                </span>
+              </div>
+              <textarea
+                value={inquiryMessage}
+                onChange={(event) => setInquiryMessage(event.target.value)}
+                disabled={!inquiryType}
+                maxLength={2000}
+                placeholder={
+                  inquiryType ? "문의하실 내용을 자세히 적어 주세요." : "먼저 문의 유형을 선택해주세요."
+                }
+                className="mt-3 min-h-[140px] w-full resize-none rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6] disabled:cursor-not-allowed disabled:bg-[#fff1f8] disabled:text-[#c99bb4]"
+              />
+
+              {inquiryErrorMessage ? (
+                <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
+                  {inquiryErrorMessage}
+                </p>
+              ) : null}
+              {inquirySuccessMessage ? (
+                <p className="mt-3 rounded-[18px] bg-[#e5f6e9] px-4 py-3 text-sm font-bold text-[#357a4a]">
+                  {inquirySuccessMessage}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row-reverse">
+              <button
+                onClick={handleSubmitInquiry}
+                disabled={isInquiryPending}
+                className="min-w-[140px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isInquiryPending ? "보내는 중..." : "문의 보내기"}
+              </button>
+            </div>
+            <p className="mt-3 text-center text-xs text-[#b98fae]">
+              등록된 관리자 이메일로 직접 답변드립니다
+            </p>
           </div>
         </div>
       ) : null}

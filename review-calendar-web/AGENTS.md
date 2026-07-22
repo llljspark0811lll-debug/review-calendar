@@ -22,6 +22,9 @@
 - `DATABASE_URL`: PostgreSQL 연결 문자열
 - `RESEND_API_KEY`: 회원가입 이메일 인증번호 발송용 Resend API 키
 - `RESEND_FROM_EMAIL`: 인증 메일 발신자 주소
+- `INQUIRY_TO_EMAIL`: "문의/요청" 모달로 접수된 문의를 받을 관리자 이메일 주소
+- `TELEGRAM_BOT_TOKEN`: 관리자 알림용 텔레그램 봇 토큰(문의/요청, 회원가입, 체험단 등록, 계정 탈퇴 시 발송)
+- `TELEGRAM_CHAT_ID`: 위 알림을 받을 텔레그램 채팅 ID
 
 ## 저장 구조
 
@@ -152,6 +155,7 @@
 - `POST /api/campaigns`
 - `PATCH /api/campaigns/[id]/schedule`
 - `PATCH /api/campaigns/[id]/status`
+- `POST /api/inquiries`
 
 ## 새 작업 시작 규칙
 
