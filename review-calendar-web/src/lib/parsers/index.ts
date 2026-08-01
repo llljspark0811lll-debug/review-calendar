@@ -26,6 +26,12 @@ const parserMatchers = [
       return url.hostname.replace(/^www\./, "") === "chvu.co.kr";
     },
   },
+  {
+    id: "keyplat",
+    canHandle(url: URL) {
+      return url.hostname.replace(/^www\./, "") === "keyplat.net";
+    },
+  },
 ] as const;
 
 function findParserMatcher(url: URL) {
@@ -48,6 +54,11 @@ async function loadParser(
   if (parserId === "chvu") {
     const { chvuParser } = await import("@/lib/parsers/chvu");
     return chvuParser;
+  }
+
+  if (parserId === "keyplat") {
+    const { keyplatParser } = await import("@/lib/parsers/keyplat");
+    return keyplatParser;
   }
 
   const { gangnamParser } = await import("@/lib/parsers/gangnam");
@@ -82,6 +93,7 @@ const contentSiteSignatures = [
   { id: "dailyview", pattern: /dailyview\.kr|데일리뷰/i },
   { id: "gangnam", pattern: /xn--939au0g4vj8sq\.net|강남맛집/i },
   { id: "chvu", pattern: /chvu\.co\.kr|체험뷰/i },
+  { id: "keyplat", pattern: /keyplat|키플랫/i },
 ] as const;
 
 function detectParserIdFromContent(content: string) {

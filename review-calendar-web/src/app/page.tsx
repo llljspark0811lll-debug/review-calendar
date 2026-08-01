@@ -450,6 +450,7 @@ export default function Home() {
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
   const [inquiryType, setInquiryType] = useState<InquiryType | null>(null);
   const [inquiryMessage, setInquiryMessage] = useState("");
+  const [isInquiryConfirming, setIsInquiryConfirming] = useState(false);
   const [isInquiryPending, setIsInquiryPending] = useState(false);
   const [inquiryErrorMessage, setInquiryErrorMessage] = useState("");
   const [inquirySuccessMessage, setInquirySuccessMessage] = useState("");
@@ -1030,6 +1031,7 @@ export default function Home() {
   function openInquiryModal() {
     setInquiryType(null);
     setInquiryMessage("");
+    setIsInquiryConfirming(false);
     setInquiryErrorMessage("");
     setInquirySuccessMessage("");
     setIsInquiryModalOpen(true);
@@ -1039,8 +1041,26 @@ export default function Home() {
     setIsInquiryModalOpen(false);
     setInquiryType(null);
     setInquiryMessage("");
+    setIsInquiryConfirming(false);
     setInquiryErrorMessage("");
     setInquirySuccessMessage("");
+  }
+
+  function handleRequestInquiryConfirm() {
+    setInquiryErrorMessage("");
+    setInquirySuccessMessage("");
+
+    if (!inquiryType) {
+      setInquiryErrorMessage("문의 유형을 선택해 주세요.");
+      return;
+    }
+
+    if (!inquiryMessage.trim()) {
+      setInquiryErrorMessage("문의 내용을 입력해 주세요.");
+      return;
+    }
+
+    setIsInquiryConfirming(true);
   }
 
   async function handleSubmitInquiry() {
@@ -1079,8 +1099,10 @@ export default function Home() {
       }
 
       setInquiryMessage("");
+      setIsInquiryConfirming(false);
       setInquirySuccessMessage("문의가 접수됐어요. 등록된 관리자 이메일로 답변드릴게요.");
     } catch (error) {
+      setIsInquiryConfirming(false);
       setInquiryErrorMessage(
         error instanceof Error ? error.message : "문의 접수 중 문제가 생겼어요.",
       );
@@ -1968,7 +1990,7 @@ export default function Home() {
                   eyebrow="월간 일정"
                   title={`${selectedYear}년 ${selectedMonth}월`}
                 />
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="font-legible flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => moveVisibleMonth(-1)}
                     className="inline-flex h-9 w-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-white text-sm font-bold text-[#c45991] shadow-[0_10px_18px_rgba(255,190,219,0.25)] sm:h-auto sm:w-auto sm:min-w-[72px] sm:px-4 sm:py-2"
@@ -2036,22 +2058,22 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-[22px] bg-[#fff1f8] px-4 py-3 text-sm leading-6 text-[#9b6280]">
+              <div className="font-legible mt-4 rounded-[22px] bg-[#fff1f8] px-4 py-3 text-sm leading-6 text-[#9b6280]">
                 날짜를 누르면 해당 날짜에 체험 가능한 체험단 목록이 뜨고, 그 안에서
                 바로 체험 일정을 확정할 수 있어요.
               </div>
               {scheduleMessage ? (
-                <p className="mt-3 rounded-[18px] bg-[#ddfff4] px-4 py-3 text-sm font-bold text-[#26766a]">
+                <p className="font-legible mt-3 rounded-[18px] bg-[#ddfff4] px-4 py-3 text-sm font-bold text-[#26766a]">
                   {scheduleMessage}
                 </p>
               ) : null}
               {scheduleErrorMessage ? (
-                <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
+                <p className="font-legible mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
                   {scheduleErrorMessage}
                 </p>
               ) : null}
               {!holidaySyncEnabled ? (
-                <p className="mt-3 rounded-[18px] bg-[#fff6da] px-4 py-3 text-sm font-bold text-[#9b6a1f]">
+                <p className="font-legible mt-3 rounded-[18px] bg-[#fff6da] px-4 py-3 text-sm font-bold text-[#9b6a1f]">
                   공휴일 자동 표시를 켜려면 `DATA_GO_KR_SERVICE_KEY` 환경변수를 설정해 주세요.
                 </p>
               ) : null}
@@ -2941,9 +2963,11 @@ export default function Home() {
                 <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
                   문의 / 요청
                 </p>
-                <h2 className="mt-2 text-2xl font-black text-[#8f315f] sm:text-3xl">
-                  무엇을 도와드릴까요?
-                </h2>
+                {isInquiryConfirming ? null : (
+                  <h2 className="mt-2 text-2xl font-black text-[#8f315f] sm:text-3xl">
+                    무엇을 도와드릴까요?
+                  </h2>
+                )}
                 <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
                   보내주신 내용을 확인 후 이메일로 답변드립니다 (1~2 영업일)
                 </p>
@@ -2956,67 +2980,94 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
-              <label className="block text-sm font-black text-[#b94a81]">
-                문의 유형
-              </label>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {inquiryTypeOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setInquiryType(option.id)}
-                    className={`flex items-center gap-2 rounded-[20px] border px-4 py-3 text-left text-sm font-bold transition ${
-                      inquiryType === option.id
-                        ? "border-[#ff93c4] bg-[#fff0f7] text-[#c4518a]"
-                        : "border-[#ffd3e6] bg-white text-[#7f355b]"
-                    }`}
-                  >
-                    <span aria-hidden="true">{option.icon}</span>
-                    <span className="min-w-0 truncate">{option.label}</span>
-                  </button>
-                ))}
+            {isInquiryConfirming ? (
+              <div className="mt-6 rounded-[28px] border border-[#ffd3e6] bg-white/85 p-5 text-center">
+                <p className="text-sm leading-6 text-[#8a5d75]">
+                  아래 이메일 주소로 답변을 보내드릴게요.
+                </p>
+                <p className="mt-2 text-lg font-black text-[#8f315f]">
+                  {currentUser?.email}
+                </p>
+                <p className="mt-3 text-xs leading-5 text-[#b98fae]">
+                  주소가 맞으면 보내기를, 아니면 이전으로 돌아가 설정에서 내 메일을 확인해주세요.
+                </p>
               </div>
-
-              <div className="mt-5 flex items-center justify-between">
+            ) : (
+              <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
                 <label className="block text-sm font-black text-[#b94a81]">
-                  문의 내용
+                  문의 유형
                 </label>
-                <span className="text-xs font-bold text-[#c99bb4]">
-                  {inquiryMessage.length}/2000
-                </span>
-              </div>
-              <textarea
-                value={inquiryMessage}
-                onChange={(event) => setInquiryMessage(event.target.value)}
-                disabled={!inquiryType}
-                maxLength={2000}
-                placeholder={
-                  inquiryType ? "문의하실 내용을 자세히 적어 주세요." : "먼저 문의 유형을 선택해주세요."
-                }
-                className="mt-3 min-h-[140px] w-full resize-none rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6] disabled:cursor-not-allowed disabled:bg-[#fff1f8] disabled:text-[#c99bb4]"
-              />
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {inquiryTypeOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setInquiryType(option.id)}
+                      className={`flex items-center gap-2 rounded-[20px] border px-4 py-3 text-left text-sm font-bold transition ${
+                        inquiryType === option.id
+                          ? "border-[#ff93c4] bg-[#fff0f7] text-[#c4518a]"
+                          : "border-[#ffd3e6] bg-white text-[#7f355b]"
+                      }`}
+                    >
+                      <span aria-hidden="true">{option.icon}</span>
+                      <span className="min-w-0 truncate">{option.label}</span>
+                    </button>
+                  ))}
+                </div>
 
-              {inquiryErrorMessage ? (
-                <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
-                  {inquiryErrorMessage}
-                </p>
-              ) : null}
-              {inquirySuccessMessage ? (
-                <p className="mt-3 rounded-[18px] bg-[#e5f6e9] px-4 py-3 text-sm font-bold text-[#357a4a]">
-                  {inquirySuccessMessage}
-                </p>
-              ) : null}
-            </div>
+                <div className="mt-5 flex items-center justify-between">
+                  <label className="block text-sm font-black text-[#b94a81]">
+                    문의 내용
+                  </label>
+                  <span className="text-xs font-bold text-[#c99bb4]">
+                    {inquiryMessage.length}/2000
+                  </span>
+                </div>
+                <textarea
+                  value={inquiryMessage}
+                  onChange={(event) => setInquiryMessage(event.target.value)}
+                  disabled={!inquiryType}
+                  maxLength={2000}
+                  placeholder={
+                    inquiryType ? "문의하실 내용을 자세히 적어 주세요." : "먼저 문의 유형을 선택해주세요."
+                  }
+                  className="mt-3 min-h-[140px] w-full resize-none rounded-[20px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-4 text-sm text-[#7f355b] outline-none transition focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6] disabled:cursor-not-allowed disabled:bg-[#fff1f8] disabled:text-[#c99bb4]"
+                />
+              </div>
+            )}
+
+            {inquiryErrorMessage ? (
+              <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
+                {inquiryErrorMessage}
+              </p>
+            ) : null}
+            {inquirySuccessMessage ? (
+              <p className="mt-3 rounded-[18px] bg-[#e5f6e9] px-4 py-3 text-sm font-bold text-[#357a4a]">
+                {inquirySuccessMessage}
+              </p>
+            ) : null}
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row-reverse">
               <button
-                onClick={handleSubmitInquiry}
+                onClick={isInquiryConfirming ? handleSubmitInquiry : handleRequestInquiryConfirm}
                 disabled={isInquiryPending}
                 className="min-w-[140px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isInquiryPending ? "보내는 중..." : "문의 보내기"}
+                {isInquiryPending
+                  ? "보내는 중..."
+                  : isInquiryConfirming
+                    ? "이 이메일로 보내기"
+                    : "문의 보내기"}
               </button>
+              {isInquiryConfirming ? (
+                <button
+                  onClick={() => setIsInquiryConfirming(false)}
+                  disabled={isInquiryPending}
+                  className="min-w-[96px] whitespace-nowrap rounded-full bg-white px-5 py-3 text-sm font-bold text-[#c55a90] shadow-[0_12px_22px_rgba(255,190,219,0.3)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  이전으로
+                </button>
+              ) : null}
             </div>
             <p className="mt-3 text-center text-xs text-[#b98fae]">
               등록된 관리자 이메일로 직접 답변드립니다
@@ -3510,9 +3561,9 @@ function CheckpointCard({
       onClick={onClick}
       className={`rotate-[-1deg] rounded-[28px] p-[1px] text-left transition-transform hover:-translate-y-1 ${bgClass} shadow-[0_18px_28px_rgba(255,193,219,0.25)]`}
     >
-      <div className="rounded-[27px] bg-white/88 px-4 py-4">
+      <div className="font-legible rounded-[27px] bg-white/88 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
-          <span className="font-display text-lg text-[#d2518f]">{label}</span>
+          <span className="text-lg text-[#d2518f]">{label}</span>
           <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#c25b8f] shadow-[0_6px_14px_rgba(255,204,227,0.32)]">
             {countLabel}
           </span>
@@ -3558,7 +3609,7 @@ function CampaignListSection({
     <article className="relative overflow-hidden rounded-[42px] border-2 border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,244,250,0.94))] p-5 shadow-[0_30px_70px_rgba(233,116,171,0.18)] sm:p-6">
       <SectionTitle eyebrow={eyebrow} title={title} />
 
-      <div className="mt-6 grid gap-4">
+      <div className="font-legible mt-6 grid gap-4">
         {isLoading ? (
           <div className="rounded-[30px] border border-dashed border-[#f0bfd8] bg-white/70 px-5 py-8 text-center text-sm leading-7 text-[#9a6280]">
             체험단 목록을 불러오는 중이에요.
@@ -3701,7 +3752,7 @@ function CampaignListSection({
         )}
       </div>
       {page && totalPages && totalPages > 1 && onPageChange ? (
-        <div className="mt-5 flex items-center justify-center gap-3">
+        <div className="font-legible mt-5 flex items-center justify-center gap-3">
           <button
             onClick={() => onPageChange(Math.max(1, page - 1))}
             disabled={page === 1}
@@ -3737,7 +3788,7 @@ function CampaignDetailSection({
       <SectionTitle eyebrow="선택한 체험단 정보" title="상세 정보" />
 
       {selectedCampaign ? (
-        <div className="mt-6 rounded-[34px] bg-[linear-gradient(180deg,rgba(255,242,248,0.95),rgba(255,232,243,0.88))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+        <div className="font-legible mt-6 rounded-[34px] bg-[linear-gradient(180deg,rgba(255,242,248,0.95),rgba(255,232,243,0.88))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
           <div className="flex flex-wrap gap-2">
             <Badge>{selectedCampaign.site}</Badge>
             <Badge tone="mint">연락처 입력 완료</Badge>
@@ -3786,7 +3837,7 @@ function CampaignDetailSection({
           </div>
         </div>
       ) : (
-        <div className="mt-6 rounded-[34px] border border-dashed border-[#f0bfd8] bg-white/70 px-5 py-8 text-center text-sm leading-7 text-[#9a6280]">
+        <div className="font-legible mt-6 rounded-[34px] border border-dashed border-[#f0bfd8] bg-white/70 px-5 py-8 text-center text-sm leading-7 text-[#9a6280]">
           아직 선택된 체험단이 없어요. 실제 선정 링크를 등록하면 상세 정보를
           여기서 확인할 수 있어요.
         </div>
