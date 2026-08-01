@@ -2669,7 +2669,7 @@ export default function Home() {
                   ) : null}
 
                   <label className="mt-4 block text-sm font-black text-[#b94a81]">
-                    업체 연락처
+                    업체 연락처 (선택)
                   </label>
                   <input
                     ref={onboardingPhoneInputRef}
@@ -2684,13 +2684,14 @@ export default function Home() {
                   />
                   {isOnboardingPhoneStep ? (
                     <p className="mt-2 text-xs font-bold text-[#c45991]">
-                      마지막으로 업체 연락처만 직접 입력해주세요. 이 정보는
+                      업체 연락처는 나중에 입력해도 괜찮아요. 이 정보는
                       자동으로 채워지지 않아요.
                     </p>
                   ) : null}
                   <div className="mt-3 rounded-[20px] bg-[#fff1f8] px-4 py-3 text-xs leading-6 text-[#9a6280]">
                     업체 연락처는 체험단 사이트에서 확인한 예약번호를 직접 입력해 주세요.
-                    나머지 정보는 붙여넣은 페이지에서 자동으로 불러와요.
+                    나머지 정보는 붙여넣은 페이지에서 자동으로 불러와요. 비워두고 등록해도
+                    괜찮아요.
                   </div>
                   {registerErrorMessage ? (
                     <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
@@ -2715,7 +2716,7 @@ export default function Home() {
                   ) : null}
                   <button
                     onClick={handleRegisterLink}
-                    disabled={isPending || !parsePreview || !companyPhoneValue.trim()}
+                    disabled={isPending || !parsePreview}
                     className={`min-w-[160px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60 ${
                       isOnboardingSubmitStep ? "ring-4 ring-[#ffd3e6] animate-pulse" : ""
                     }`}
@@ -3791,7 +3792,11 @@ function CampaignDetailSection({
         <div className="font-legible mt-6 rounded-[34px] bg-[linear-gradient(180deg,rgba(255,242,248,0.95),rgba(255,232,243,0.88))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
           <div className="flex flex-wrap gap-2">
             <Badge>{selectedCampaign.site}</Badge>
-            <Badge tone="mint">연락처 입력 완료</Badge>
+            {selectedCampaign.companyPhone ? (
+              <Badge tone="mint">연락처 입력 완료</Badge>
+            ) : (
+              <Badge tone="yellow">연락처 미입력</Badge>
+            )}
           </div>
           <h3 className="mt-3 text-3xl font-black text-[#8f315f]">
             <CampaignTitle title={selectedCampaign.title} />

@@ -52,17 +52,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!companyPhone) {
-      return NextResponse.json(
-        { message: "업체 연락처를 입력해 주세요." },
-        { status: 400 },
-      );
-    }
-
     const campaign: Campaign = {
       ...body.preview,
       id: randomUUID(),
-      companyPhone,
+      companyPhone: companyPhone || null,
       contactLocked: false,
       status: "unscheduled",
       selectedDate: null,
