@@ -35,6 +35,39 @@ type AppUser = {
 type AuthMode = "login" | "register";
 type ParsedCampaignPreview = Omit<Campaign, "id" | "companyPhone" | "contactLocked">;
 
+type ManualCampaignForm = {
+  title: string;
+  site: string;
+  reward: string;
+  experienceStartDate: string;
+  experienceEndDate: string;
+  reviewDeadline: string;
+  address: string;
+  capacity: string;
+  companyName: string;
+  detailUrl: string;
+  memo: string;
+};
+
+const emptyManualForm: ManualCampaignForm = {
+  title: "",
+  site: "",
+  reward: "",
+  experienceStartDate: "",
+  experienceEndDate: "",
+  reviewDeadline: "",
+  address: "",
+  capacity: "",
+  companyName: "",
+  detailUrl: "",
+  memo: "",
+};
+
+const manualFieldInputClass =
+  "mt-2 w-full rounded-[16px] border border-[#ffd3e6] bg-[#fff8fc] px-4 py-3 text-sm text-[#7f355b] outline-none transition placeholder:text-[#c99bb4] focus:border-[#ff93c4] focus:ring-2 focus:ring-[#ffd3e6]";
+
+const manualEntryAccent = "from-[#cbd5e1] via-[#e2e8f0] to-[#f8fafc]";
+
 type InquiryType = "usage" | "feature" | "bug" | "etc";
 
 const inquiryTypeOptions: { id: InquiryType; label: string; icon: string }[] = [
@@ -474,6 +507,8 @@ export default function Home() {
   const [registerErrorMessage, setRegisterErrorMessage] = useState("");
   const [parsePreview, setParsePreview] = useState<ParsedCampaignPreview | null>(null);
   const [isParsingPreview, setIsParsingPreview] = useState(false);
+  const [registerMode, setRegisterMode] = useState<"paste" | "manual">("paste");
+  const [manualForm, setManualForm] = useState<ManualCampaignForm>(emptyManualForm);
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [scheduleErrorMessage, setScheduleErrorMessage] = useState("");
   const [isBootstrapLoading, setIsBootstrapLoading] = useState(true);
@@ -1271,12 +1306,14 @@ export default function Home() {
     }
   }
 
-  function openRegisterModal() {
+  function openRegisterModal(mode: "paste" | "manual" = "paste") {
     setPasteContent("");
     setCompanyPhoneValue("");
     setRegisterErrorMessage("");
     setParsePreview(null);
     setIsParsingPreview(false);
+    setRegisterMode(mode);
+    setManualForm(emptyManualForm);
     setIsRegisterModalOpen(true);
   }
 
@@ -1286,7 +1323,16 @@ export default function Home() {
       return;
     }
 
-    openRegisterModal();
+    openRegisterModal("paste");
+  }
+
+  function handleManualRegisterButtonClick() {
+    if (onboardingStage === "spotlight") {
+      startOnboardingTutorial();
+      return;
+    }
+
+    openRegisterModal("manual");
   }
 
   function closeRegisterModal() {
@@ -1295,7 +1341,62 @@ export default function Home() {
     setRegisterErrorMessage("");
     setParsePreview(null);
     setIsParsingPreview(false);
+    setRegisterMode("paste");
+    setManualForm(emptyManualForm);
     setIsRegisterModalOpen(false);
+  }
+
+  function updateManualField(field: keyof ManualCampaignForm, value: string) {
+    setManualForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function buildManualPreview(): ParsedCampaignPreview | null {
+    const title = manualForm.title.trim();
+    const site = manualForm.site.trim();
+    const { experienceStartDate, experienceEndDate, reviewDeadline } = manualForm;
+
+    if (!title) {
+      setRegisterErrorMessage("체험단명을 입력해 주세요.");
+      return null;
+    }
+
+    if (!site) {
+      setRegisterErrorMessage("체험단 사이트를 입력해 주세요.");
+      return null;
+    }
+
+    if (!experienceStartDate || !experienceEndDate) {
+      setRegisterErrorMessage("체험 가능 기간을 입력해 주세요.");
+      return null;
+    }
+
+    if (experienceStartDate > experienceEndDate) {
+      setRegisterErrorMessage("체험 시작일은 종료일보다 늦을 수 없어요.");
+      return null;
+    }
+
+    if (!reviewDeadline) {
+      setRegisterErrorMessage("리뷰 마감일을 입력해 주세요.");
+      return null;
+    }
+
+    return {
+      title,
+      site,
+      reward: manualForm.reward.trim(),
+      status: "unscheduled",
+      detailUrl: manualForm.detailUrl.trim(),
+      experienceStartDate,
+      experienceEndDate,
+      reviewDeadline,
+      selectedDate: null,
+      capacity: manualForm.capacity.trim(),
+      companyName: manualForm.companyName.trim(),
+      address: manualForm.address.trim(),
+      memo: manualForm.memo.trim(),
+      sticker: site,
+      accent: manualEntryAccent,
+    };
   }
 
   async function requestParsePreview(content: string) {
@@ -1344,14 +1445,7 @@ export default function Home() {
     void requestParsePreview(captured);
   }
 
-  function handleRegisterLink() {
-    setRegisterErrorMessage("");
-
-    if (!parsePreview) {
-      setRegisterErrorMessage("체험단 페이지 내용을 먼저 붙여넣어 주세요.");
-      return;
-    }
-
+  function submitCampaignPreview(preview: ParsedCampaignPreview) {
     startTransition(async () => {
       try {
         const response = await fetch("/api/campaigns", {
@@ -1360,7 +1454,7 @@ export default function Home() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            preview: parsePreview,
+            preview,
             companyPhone: companyPhoneValue.trim(),
           }),
         });
@@ -1395,12 +1489,37 @@ export default function Home() {
     });
   }
 
+  function handleRegisterLink() {
+    setRegisterErrorMessage("");
+
+    if (!parsePreview) {
+      setRegisterErrorMessage("체험단 페이지 내용을 먼저 붙여넣어 주세요.");
+      return;
+    }
+
+    submitCampaignPreview(parsePreview);
+  }
+
+  function handleRegisterManual() {
+    setRegisterErrorMessage("");
+
+    const preview = buildManualPreview();
+
+    if (!preview) {
+      return;
+    }
+
+    submitCampaignPreview(preview);
+  }
+
   function startOnboardingTutorial() {
     setPasteContent("");
     setCompanyPhoneValue("");
     setRegisterErrorMessage("");
     setParsePreview(null);
     setIsParsingPreview(false);
+    setRegisterMode("paste");
+    setManualForm(emptyManualForm);
     setOnboardingCampaignId(null);
     setOnboardingStage("tutorial");
     setIsRegisterModalOpen(true);
@@ -1838,30 +1957,60 @@ export default function Home() {
           <div className="relative rounded-[38px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,245,250,0.98),rgba(255,238,247,0.88))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-8">
             <div>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,760px)_minmax(280px,1fr)] xl:items-start">
-                <div className="relative grid gap-4">
+                <div className="relative grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <button
                     ref={registerButtonRef}
                     onClick={handleRegisterButtonClick}
-                    className={`relative min-h-[190px] overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] px-7 py-8 text-left text-white shadow-[0_24px_42px_rgba(239,139,192,0.34)] transition-transform hover:-translate-y-1 ${
+                    className={`relative min-h-[168px] overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#cf6a9d_0%,#b1548a_100%)] px-5 py-6 text-left text-white shadow-[0_24px_42px_rgba(177,84,138,0.34)] transition-transform hover:-translate-y-1 sm:min-h-[190px] sm:px-7 sm:py-8 ${
                       onboardingStage === "spotlight"
                         ? "ring-4 ring-white ring-offset-4 ring-offset-white animate-pulse"
                         : ""
                     }`}
                   >
                     <div className="absolute -right-5 -top-5 h-24 w-24 rounded-full bg-white/12" />
-                    <div className="relative z-10 flex items-start justify-between gap-5">
+                    <div className="relative z-10 flex items-start justify-between gap-4 sm:gap-5">
                       <div className="min-w-0">
-                        <span className="block font-display text-[38px] leading-none">
-                          체험단 등록
+                        <span className="block font-display text-[28px] leading-none sm:text-[34px] lg:text-[38px]">
+                          체험단 자동등록
                         </span>
-                        <span className="mt-5 block max-w-[220px] text-base leading-7 text-white/92">
+                        <span className="mt-4 block text-sm leading-6 text-white/92 sm:mt-5 sm:text-base sm:leading-7">
                           선정된 체험단 페이지 내용을 붙여넣고 체험정보와 일정을 바로
                           관리하세요.
                         </span>
                       </div>
-                      <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-white/18">
-                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-9 w-9" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-white/18 sm:h-16 sm:w-16 sm:rounded-[22px]">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 sm:h-9 sm:w-9" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={handleManualRegisterButtonClick}
+                    className="relative min-h-[168px] overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#ef8bc0_0%,#df7db1_100%)] px-5 py-6 text-left text-white shadow-[0_24px_42px_rgba(239,139,192,0.34)] transition-transform hover:-translate-y-1 sm:min-h-[190px] sm:px-7 sm:py-8"
+                  >
+                    <div className="absolute -right-5 -top-5 h-24 w-24 rounded-full bg-white/12" />
+                    <div className="relative z-10 flex items-start justify-between gap-4 sm:gap-5">
+                      <div className="min-w-0">
+                        <span className="block font-display text-[28px] leading-none sm:text-[34px] lg:text-[38px]">
+                          체험단 직접등록
+                        </span>
+                        <span className="mt-4 block text-sm leading-6 text-white/92 sm:mt-5 sm:text-base sm:leading-7">
+                          지원하지 않는 사이트도 정보를 직접 입력해서 체험정보와
+                          일정을 바로 관리하세요.
+                        </span>
+                      </div>
+                      <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-white/18 sm:h-16 sm:w-16 sm:rounded-[22px]">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 sm:h-9 sm:w-9" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path
+                            d="M4 20L4.8 16.4L15.5 5.7C16.1 5.1 17 5.1 17.6 5.7L18.9 7C19.5 7.6 19.5 8.5 18.9 9.1L8.2 19.8L4 20Z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path d="M13.8 7.4L17.2 10.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                         </svg>
                       </span>
                     </div>
@@ -2467,14 +2616,21 @@ export default function Home() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="font-display text-xs tracking-[0.18em] text-[#db6aa1]">
-                      {onboardingStage === "tutorial" ? "체험단 등록 가이드" : "체험단 등록하기"}
+                      {onboardingStage === "tutorial"
+                        ? "체험단 등록 가이드"
+                        : registerMode === "manual"
+                          ? "체험단 직접등록"
+                          : "체험단 자동등록"}
                     </p>
                     <h2 className="mt-2 text-3xl font-black text-[#8f315f]">
-                      선정된 체험단 페이지 붙여넣기
+                      {onboardingStage !== "tutorial" && registerMode === "manual"
+                        ? "체험단 정보 직접 입력하기"
+                        : "선정된 체험단 페이지 붙여넣기"}
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-[#8a5d75]">
-                      선정된 체험단 페이지를 열고 전체 복사해서 붙여넣으면 체험단명,
-                      체험 기간, 리뷰 마감일 같은 정보를 자동으로 채워줘요.
+                      {onboardingStage !== "tutorial" && registerMode === "manual"
+                        ? "지원하지 않는 사이트라면 체험단명, 체험 기간, 리뷰 마감일 같은 정보를 직접 입력해서 등록할 수 있어요."
+                        : "선정된 체험단 페이지를 열고 전체 복사해서 붙여넣으면 체험단명, 체험 기간, 리뷰 마감일 같은 정보를 자동으로 채워줘요."}
                     </p>
                   </div>
                   {onboardingStage !== "tutorial" ? (
@@ -2601,6 +2757,164 @@ export default function Home() {
                       </span>
                     </button>
                   </div>
+                ) : registerMode === "manual" ? (
+                  <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
+                    <p className="text-xs font-bold text-[#b3688e]">
+                      자동으로 인식되지 않는 사이트라면 아래 정보를 직접 입력해서 등록할 수
+                      있어요. (*는 필수 입력)
+                    </p>
+
+                    <div className="mt-4 grid gap-3">
+                      <div>
+                        <label className="block text-xs font-black text-[#b94a81]">
+                          체험단명 *
+                        </label>
+                        <input
+                          value={manualForm.title}
+                          onChange={(event) => updateManualField("title", event.target.value)}
+                          placeholder="예) [OO맘] 부산 해운대 카페 체험단"
+                          className={manualFieldInputClass}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            체험단 사이트 *
+                          </label>
+                          <input
+                            value={manualForm.site}
+                            onChange={(event) => updateManualField("site", event.target.value)}
+                            placeholder="예) 인스타 체험단"
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            제공 내역
+                          </label>
+                          <input
+                            value={manualForm.reward}
+                            onChange={(event) => updateManualField("reward", event.target.value)}
+                            placeholder="예) 아메리카노 2잔 무료 체험"
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            체험 시작일 *
+                          </label>
+                          <input
+                            type="date"
+                            value={manualForm.experienceStartDate}
+                            onChange={(event) =>
+                              updateManualField("experienceStartDate", event.target.value)
+                            }
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            체험 종료일 *
+                          </label>
+                          <input
+                            type="date"
+                            value={manualForm.experienceEndDate}
+                            onChange={(event) =>
+                              updateManualField("experienceEndDate", event.target.value)
+                            }
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            리뷰 마감일 *
+                          </label>
+                          <input
+                            type="date"
+                            value={manualForm.reviewDeadline}
+                            onChange={(event) =>
+                              updateManualField("reviewDeadline", event.target.value)
+                            }
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            모집 인원
+                          </label>
+                          <input
+                            value={manualForm.capacity}
+                            onChange={(event) =>
+                              updateManualField("capacity", event.target.value)
+                            }
+                            placeholder="예) 5명"
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black text-[#b94a81]">
+                          방문 주소
+                        </label>
+                        <input
+                          value={manualForm.address}
+                          onChange={(event) => updateManualField("address", event.target.value)}
+                          placeholder="예) 부산 해운대구 구청로 12"
+                          className={manualFieldInputClass}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            업체명
+                          </label>
+                          <input
+                            value={manualForm.companyName}
+                            onChange={(event) =>
+                              updateManualField("companyName", event.target.value)
+                            }
+                            placeholder="예) 해운대 카페"
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-[#b94a81]">
+                            상세 링크
+                          </label>
+                          <input
+                            value={manualForm.detailUrl}
+                            onChange={(event) =>
+                              updateManualField("detailUrl", event.target.value)
+                            }
+                            placeholder="예) https://..."
+                            className={manualFieldInputClass}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black text-[#b94a81]">
+                          상세 메모
+                        </label>
+                        <textarea
+                          value={manualForm.memo}
+                          onChange={(event) => updateManualField("memo", event.target.value)}
+                          placeholder="방문 안내, 키워드, 미션 등 자유롭게 남겨두세요"
+                          rows={4}
+                          className={`${manualFieldInputClass} resize-none`}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 ) : (
                   <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
                     <ol className="grid gap-1 text-xs font-bold text-[#b3688e]">
@@ -2621,51 +2935,57 @@ export default function Home() {
                 )}
 
                 <div className="mt-6 rounded-[28px] border border-white/70 bg-white/85 p-5">
-                  {isParsingPreview ? (
-                    <p className="mt-3 rounded-[18px] bg-[#fff1f8] px-4 py-3 text-sm font-bold text-[#b3688e]">
-                      체험단 정보를 확인하고 있어요...
-                    </p>
-                  ) : null}
-
-                  {parsePreview ? (
-                    <div
-                      ref={onboardingPreviewCardRef}
-                      className={`mt-3 rounded-[22px] border bg-[#fff8fc] p-4 transition ${
-                        isOnboardingPreviewStep
-                          ? "border-[#ff9fc7] ring-4 ring-[#ffd3e6]"
-                          : "border-[#ffd3e6]"
-                      }`}
-                    >
-                      {isOnboardingPreviewStep ? (
-                        <p className="mb-2 text-xs font-bold text-[#c45991]">
-                          체험단 정보를 자동으로 채웠어요! 아래 내용을 확인해보세요.
+                  {onboardingStage === "tutorial" || registerMode === "paste" ? (
+                    <>
+                      {isParsingPreview ? (
+                        <p className="mt-3 rounded-[18px] bg-[#fff1f8] px-4 py-3 text-sm font-bold text-[#b3688e]">
+                          체험단 정보를 확인하고 있어요...
                         </p>
                       ) : null}
-                      <p className="inline-block rounded-full bg-[#ffe1ef] px-3 py-1 text-xs font-black text-[#b3346c]">
-                        {parsePreview.site} 인식 완료 ✓
-                      </p>
-                      <p className="mt-2 text-base font-black text-[#7f355b]">
-                        <CampaignTitle title={parsePreview.title} />
-                      </p>
-                      <p className="mt-1 text-sm text-[#8a5d75]">{parsePreview.reward}</p>
-                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#8a5d75]">
-                        <div className="rounded-[14px] bg-white/80 px-3 py-2">
-                          <p className="font-bold text-[#b3688e]">체험 기간</p>
-                          <p className="mt-1">
-                            {formatShortDate(parsePreview.experienceStartDate)} ~{" "}
-                            {formatShortDate(parsePreview.experienceEndDate)}
+
+                      {parsePreview ? (
+                        <div
+                          ref={onboardingPreviewCardRef}
+                          className={`mt-3 rounded-[22px] border bg-[#fff8fc] p-4 transition ${
+                            isOnboardingPreviewStep
+                              ? "border-[#ff9fc7] ring-4 ring-[#ffd3e6]"
+                              : "border-[#ffd3e6]"
+                          }`}
+                        >
+                          {isOnboardingPreviewStep ? (
+                            <p className="mb-2 text-xs font-bold text-[#c45991]">
+                              체험단 정보를 자동으로 채웠어요! 아래 내용을 확인해보세요.
+                            </p>
+                          ) : null}
+                          <p className="inline-block rounded-full bg-[#ffe1ef] px-3 py-1 text-xs font-black text-[#b3346c]">
+                            {parsePreview.site} 인식 완료 ✓
                           </p>
+                          <p className="mt-2 text-base font-black text-[#7f355b]">
+                            <CampaignTitle title={parsePreview.title} />
+                          </p>
+                          <p className="mt-1 text-sm text-[#8a5d75]">{parsePreview.reward}</p>
+                          <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#8a5d75]">
+                            <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                              <p className="font-bold text-[#b3688e]">체험 기간</p>
+                              <p className="mt-1">
+                                {formatShortDate(parsePreview.experienceStartDate)} ~{" "}
+                                {formatShortDate(parsePreview.experienceEndDate)}
+                              </p>
+                            </div>
+                            <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                              <p className="font-bold text-[#b3688e]">리뷰 마감</p>
+                              <p className="mt-1">
+                                {formatShortDate(parsePreview.reviewDeadline)}
+                              </p>
+                            </div>
+                            <div className="rounded-[14px] bg-white/80 px-3 py-2">
+                              <p className="font-bold text-[#b3688e]">방문 주소</p>
+                              <p className="mt-1 truncate">{parsePreview.address}</p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="rounded-[14px] bg-white/80 px-3 py-2">
-                          <p className="font-bold text-[#b3688e]">리뷰 마감</p>
-                          <p className="mt-1">{formatShortDate(parsePreview.reviewDeadline)}</p>
-                        </div>
-                        <div className="rounded-[14px] bg-white/80 px-3 py-2">
-                          <p className="font-bold text-[#b3688e]">방문 주소</p>
-                          <p className="mt-1 truncate">{parsePreview.address}</p>
-                        </div>
-                      </div>
-                    </div>
+                      ) : null}
+                    </>
                   ) : null}
 
                   <label className="mt-4 block text-sm font-black text-[#b94a81]">
@@ -2690,8 +3010,10 @@ export default function Home() {
                   ) : null}
                   <div className="mt-3 rounded-[20px] bg-[#fff1f8] px-4 py-3 text-xs leading-6 text-[#9a6280]">
                     업체 연락처는 체험단 사이트에서 확인한 예약번호를 직접 입력해 주세요.
-                    나머지 정보는 붙여넣은 페이지에서 자동으로 불러와요. 비워두고 등록해도
-                    괜찮아요.
+                    {onboardingStage === "tutorial" || registerMode === "paste"
+                      ? " 나머지 정보는 붙여넣은 페이지에서 자동으로 불러와요."
+                      : null}{" "}
+                    비워두고 등록해도 괜찮아요.
                   </div>
                   {registerErrorMessage ? (
                     <p className="mt-3 rounded-[18px] bg-[#ffd9e1] px-4 py-3 text-sm font-bold text-[#983751]">
@@ -2715,8 +3037,21 @@ export default function Home() {
                     </button>
                   ) : null}
                   <button
-                    onClick={handleRegisterLink}
-                    disabled={isPending || !parsePreview}
+                    onClick={
+                      onboardingStage !== "tutorial" && registerMode === "manual"
+                        ? handleRegisterManual
+                        : handleRegisterLink
+                    }
+                    disabled={
+                      isPending ||
+                      (onboardingStage !== "tutorial" && registerMode === "manual"
+                        ? !manualForm.title.trim() ||
+                          !manualForm.site.trim() ||
+                          !manualForm.experienceStartDate ||
+                          !manualForm.experienceEndDate ||
+                          !manualForm.reviewDeadline
+                        : !parsePreview)
+                    }
                     className={`min-w-[160px] whitespace-nowrap rounded-full bg-[linear-gradient(180deg,#ff7db9_0%,#ff97c5_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_28px_rgba(255,123,184,0.35)] disabled:cursor-not-allowed disabled:opacity-60 ${
                       isOnboardingSubmitStep ? "ring-4 ring-[#ffd3e6] animate-pulse" : ""
                     }`}
