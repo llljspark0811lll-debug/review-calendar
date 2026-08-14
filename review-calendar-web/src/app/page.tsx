@@ -2020,7 +2020,7 @@ export default function Home() {
                 <div className="flex min-h-0 items-start xl:min-h-[190px] xl:justify-end">
                   <div className="flex w-full flex-col items-start gap-4 xl:w-auto xl:items-end">
                     <h1 className="font-display text-4xl leading-none text-[#8f315f] sm:text-6xl lg:text-[88px] xl:pt-3">
-                      리뷰캘린더
+                      리뷰캘린더 📆
                     </h1>
                     <div className="flex w-full flex-col gap-2 xl:w-auto xl:max-w-full xl:flex-row xl:flex-wrap xl:items-center xl:justify-end">
                       <div className="flex w-full items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-[0_12px_24px_rgba(255,190,219,0.28)] xl:w-auto xl:max-w-full xl:flex-wrap">
@@ -3479,7 +3479,7 @@ function AuthLoadingScreen() {
   return (
     <main className="review-calendar-app flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#ffeaf5_0%,#ffdceb_55%,#ffeaf7_100%)] px-4 text-[#7f355b]">
       <div className="rounded-[32px] border-2 border-white/70 bg-white/80 px-8 py-6 text-center shadow-[0_28px_60px_rgba(233,116,171,0.2)]">
-        <p className="font-display text-3xl text-[#8f315f]">리뷰캘린더</p>
+        <p className="font-display text-3xl text-[#8f315f]">리뷰캘린더 📆</p>
         <p className="mt-3 text-sm font-bold text-[#b45b88]">계정 상태를 확인하고 있어요.</p>
       </div>
     </main>
@@ -3540,15 +3540,15 @@ function AuthScreen({
         <section className="grid w-full overflow-hidden rounded-[40px] border-2 border-white/75 bg-white/78 shadow-[0_34px_90px_rgba(233,116,171,0.24)] backdrop-blur-xl lg:grid-cols-[0.95fr_1.05fr]">
           <div className="bg-[linear-gradient(160deg,#ef8bc0_0%,#df7db1_55%,#c56fae_100%)] p-6 text-white sm:p-8 lg:p-10">
             <p className="font-display text-4xl leading-none sm:text-5xl lg:text-6xl">
-              리뷰캘린더
+              리뷰캘린더 📆
             </p>
             <p className="mt-4 text-sm font-bold leading-6 text-white/92 sm:mt-6 sm:text-base sm:leading-7 lg:max-w-sm lg:text-lg lg:leading-8">
               선정 체험단과 리뷰 마감일을 계정 안에서 편리하게 관리하세요.
             </p>
             <div className="mt-6 grid gap-2 text-sm font-black text-white/90 sm:mt-10 sm:gap-3 sm:text-base">
-              <div className="rounded-[24px] bg-white/14 px-4 py-3">선정 체험단 자동 등록</div>
-              <div className="rounded-[24px] bg-white/14 px-4 py-3">체험단 일정 관리</div>
-              <div className="rounded-[24px] bg-white/14 px-4 py-3">리뷰 마감 체크</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">✔️ 선정 체험단 자동 등록</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">✔️ 체험단 일정 관리</div>
+              <div className="rounded-[24px] bg-white/14 px-4 py-3">✔️ 리뷰 마감 체크</div>
             </div>
           </div>
 
