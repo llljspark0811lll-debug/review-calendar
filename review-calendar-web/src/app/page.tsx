@@ -3545,7 +3545,7 @@ function AuthScreen({
             <p className="mt-4 text-sm font-bold leading-6 text-white/92 sm:mt-6 sm:text-base sm:leading-7 lg:max-w-sm lg:text-lg lg:leading-8">
               선정 체험단과 리뷰 마감일을 계정 안에서 편리하게 관리하세요.
             </p>
-            <div className="mt-6 grid gap-2 text-xs font-black text-white/90 sm:mt-10 sm:gap-3 sm:text-sm">
+            <div className="mt-6 grid gap-2 text-sm font-black text-white/90 sm:mt-10 sm:gap-3 sm:text-base">
               <div className="rounded-[24px] bg-white/14 px-4 py-3">선정 체험단 자동 등록</div>
               <div className="rounded-[24px] bg-white/14 px-4 py-3">체험단 일정 관리</div>
               <div className="rounded-[24px] bg-white/14 px-4 py-3">리뷰 마감 체크</div>
@@ -3580,8 +3580,7 @@ function AuthScreen({
                 <div className="flex gap-2">
                   <input
                     value={username}
-                    onChange={(event) => onUsernameChange(event.target.value)}
-                    onBlur={(event) =>
+                    onChange={(event) =>
                       onUsernameChange(
                         event.target.value
                           .toLowerCase()
